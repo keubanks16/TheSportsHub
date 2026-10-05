@@ -303,3 +303,7 @@ To create the Worker from scratch: in [Cloudflare](https://dash.cloudflare.com),
 | `icons/`, `manifest.webmanifest` | Home-screen icon and app settings |
 
 The Firebase settings in `index.html` (apiKey and the rest) identify the project and are meant to be public. The security rules are what protect the data.
+
+
+## The Hub onboarding
+The default gate now uses Create Account / Sign In, followed by Create a Team / Join a Team. New teams receive their own team code and isolated Firestore namespace.
