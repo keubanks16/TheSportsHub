@@ -1513,13 +1513,14 @@ body.viewer-on { overflow: hidden; }
     const base = 'https://www.gstatic.com/firebasejs/' + FB_VERSION + '/';
     let appMod;
     try {
-      [appMod, FB.A, FB.F] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')]);
+      [appMod, FB.A, FB.F, FB.S] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js'), import(base + 'firebase-storage.js')]);
     } catch (e) {
       $('#view').innerHTML = `<div class="card empty"><img src="${LOGO}" alt=""><h3>Can't reach The Hub</h3><p>Check your internet connection, then reload.</p></div>`;
       return;
     }
     const app = appMod.initializeApp(cfg);
     FB.app = app; FB.cfg = cfg;
+    FB.storage = FB.S.getStorage(app);
     FB.auth = FB.A.getAuth(app);
     try { FB.fs = FB.F.initializeFirestore(app, { localCache: FB.F.persistentLocalCache({ tabManager: FB.F.persistentMultipleTabManager() }) }); }
     catch (e) { FB.fs = FB.F.getFirestore(app); }
@@ -4223,7 +4224,7 @@ body.viewer-on { overflow: hidden; }
     },
     teamEdit(sh) {
       return head('Team settings') + `<label><span class="field-lbl">Team name</span>${inp('f.name', sh.f.name)}</label>
-        <label><span class="field-lbl">Logo URL</span>${inp('f.logoURL', sh.f.logoURL, 'placeholder="https://..." inputmode="url"')}</label>
+        <label><span class="field-lbl">Logo URL</span>${inp('f.logoURL', sh.f.logoURL, 'placeholder="https://..." inputmode="url"')}</label><button type="button" class="btn" data-act="uploadTeamLogo">Upload Logo</button><div class="hint">Choose a logo from your phone. The Hub uploads and saves it automatically.</div>
         <div class="grid2"><label><span class="field-lbl">Primary color</span>${inp('f.primaryColor', sh.f.primaryColor, 'type="color"')}</label><label><span class="field-lbl">Secondary color</span>${inp('f.secondaryColor', sh.f.secondaryColor, 'type="color"')}</label></div>
         <div class="grid2"><label><span class="field-lbl">Pitch limit</span>${inp('f.pitchLimit', sh.f.pitchLimit, 'type="number" min="0" inputmode="numeric"')}</label><label><span class="field-lbl">Innings per game</span>${inp('f.innings', sh.f.innings, 'type="number" min="1" max="12" inputmode="numeric"')}</label></div>
         <p class="small muted" style="margin:0">The live screen warns as your pitcher nears the limit. Set it to 0 to turn the warning off.</p>
@@ -6170,7 +6171,36 @@ body.viewer-on { overflow: hidden; }
     }
   }
 
+  async function uploadTeamLogoFile(file) {
+    if (!file) return null;
+    const u = FB.auth && FB.auth.currentUser;
+    if (!u || u.isAnonymous) throw new Error('Sign in first.');
+    if (!/^image\//i.test(file.type || '')) throw new Error('Choose an image file.');
+    if (file.size > 8 * 1024 * 1024) throw new Error('Logo must be under 8 MB.');
+    const ext=((file.name||'').split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+    const r=FB.S.ref(FB.storage,`teams/${TEAM_ID}/branding/logo-${Date.now()}.${ext}`);
+    await FB.S.uploadBytes(r,file,{contentType:file.type||'image/jpeg'});
+    return await FB.S.getDownloadURL(r);
+  }
+  function chooseTeamLogo() {
+    return new Promise(resolve=>{
+      const input=document.createElement('input'); input.type='file'; input.accept='image/*'; input.style.display='none';
+      input.onchange=()=>{const f=input.files&&input.files[0];input.remove();resolve(f||null);};
+      document.body.appendChild(input); input.click();
+    });
+  }
+
   Object.assign(A, {
+    async uploadTeamLogo() {
+      try {
+        const file=await chooseTeamLogo(); if(!file)return;
+        toast('Uploading logo…');
+        const url=await uploadTeamLogoFile(file);
+        const t={...(Data.team||defaultTeam()),logo:url,logoUrl:url};
+        await FB.F.setDoc(teamDoc('team','main'),t,{merge:true});
+        Data.team=t; applyBrand(); render(); toast('Team logo updated');
+      } catch(e){console.error(e);toast(e&&e.message?e.message:'Logo upload failed');}
+    },
     async createTeam() {
       const u = FB.auth && FB.auth.currentUser;
       if (!u || u.isAnonymous) return A.authOpen({ mode: 'account' });
