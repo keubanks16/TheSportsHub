@@ -6548,7 +6548,25 @@ body.viewer-on { overflow: hidden; }
       const cfg = loadAiCfg();
       if (cfg) Caps.sample = makeWorkerAI(cfg);
       // Keeps a copy of the Hub on this phone so it opens with no signal (also handles notifications).
-      if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('firebase-messaging-sw.js').catch(() => {});
+      if ('serviceWorker' in navigator && window.isSecureContext) {
+        navigator.serviceWorker.register('firebase-messaging-sw.js', { updateViaCache: 'none' }).then((reg) => {
+          // Check for a newly deployed worker every time the app opens.
+          reg.update().catch(() => {});
+          if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          reg.addEventListener('updatefound', () => {
+            const w = reg.installing;
+            if (!w) return;
+            w.addEventListener('statechange', () => {
+              if (w.state === 'installed' && navigator.serviceWorker.controller) w.postMessage({ type: 'SKIP_WAITING' });
+            });
+          });
+        }).catch(() => {});
+        // When a new worker takes control, reload once so the user immediately gets the new app.
+        let swReloaded = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (swReloaded) return; swReloaded = true; location.reload();
+        });
+      }
       const fbCfg = window.GS_FIREBASE;
       if (fbCfg && fbCfg.apiKey && fbCfg.projectId) { await bootFirebase(fbCfg); return; }
       Backend.loadLocal();

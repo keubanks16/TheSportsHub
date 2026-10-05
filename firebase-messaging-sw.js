@@ -2,7 +2,7 @@
 // 1. Keeps a copy of the Hub on the phone so it opens and keeps scoring with no signal.
 // 2. Shows notifications when the app is closed (Firebase Cloud Messaging).
 
-const CACHE = 'gs-hub-v1';
+const CACHE = 'the-hub-v5-20261005';
 const FB = 'https://www.gstatic.com/firebasejs/12.19.0/';
 const SHELL = ['./', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/icon-maskable-512.png'];
 const FB_MODULES = ['firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js', 'firebase-messaging.js'].map((f) => FB + f);
@@ -26,6 +26,11 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
+// The page can ask an installed worker to activate immediately after a deployment.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
 // A response that came through a redirect can't be handed to a page load later, so save a clean copy.
 async function clean(r) { return r.redirected ? new Response(await r.blob(), { status: 200, headers: r.headers }) : r; }
 
@@ -33,8 +38,17 @@ async function clean(r) { return r.redirected ? new Response(await r.blob(), { s
 // signal it waits a few seconds, then opens the saved copy instead of a blank screen.
 async function page(request) {
   const cache = await caches.open(CACHE);
-  const net = fetch(request).then(async (r) => { if (r && r.ok) { const c = await clean(r.clone()); cache.put(PAGE, c); } return r; });
-  const timeout = new Promise((resolve) => setTimeout(resolve, 3500));
+  // Always bypass the browser HTTP cache for app navigations. This prevents an old index.html
+  // from surviving a deployment just because Safari has it cached.
+  const fresh = new Request(request, { cache: 'no-store' });
+  const net = fetch(fresh).then(async (r) => {
+    if (r && r.ok) {
+      const c = await clean(r.clone());
+      await cache.put(PAGE, c);
+    }
+    return r;
+  });
+  const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 3500));
   try {
     const r = await Promise.race([net, timeout]);
     if (r && r.ok) return r;
