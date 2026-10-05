@@ -1,0 +1,503 @@
+rules_version = '2';
+
+// The Sports Hub migration rules.
+// Legacy root rules remain in place so the existing GS Baseball app keeps working.
+// New Sports Hub customer data is isolated beneath teams/{teamId}.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function docPath(col, id) { return /databases/$(database)/documents/$(col)/$(id); }
+    function isOwner() {
+      return signedIn() && exists(docPath('config', 'setup'))
+        && get(docPath('config', 'setup')).data.owner == request.auth.uid;
+    }
+    function myMember() { return get(docPath('members', request.auth.uid)).data; }
+    function isApproved() {
+      return signedIn() && exists(docPath('members', request.auth.uid)) && myMember().status == 'approved';
+    }
+    function isAdmin() { return isOwner() || (isApproved() && myMember().role == 'admin'); }
+    function isCamera() { return isApproved() && myMember().role == 'camera'; }
+    function isScorer() { return isApproved() && myMember().role == 'scorer'; }
+    function publicView() {
+      return exists(docPath('config', 'access')) && get(docPath('config', 'access')).data.publicView == true;
+    }
+    // Guests: family someone invited with a watch link. invites/{token} is the link (a long random
+    // token), guests/{uid} is the anonymous sign-in that opened it. They can watch while the invite
+    // exists; turning the invite off (deleting it) ends it.
+    function isGuest() {
+      return signedIn() && exists(docPath('guests', request.auth.uid))
+        && exists(docPath('invites', get(docPath('guests', request.auth.uid)).data.token));
+    }
+    function canView() { return publicView() || isApproved() || isAdmin() || isGuest(); }
+    function feeAccess() { return isOwner() || (isApproved() && myMember().get('fees', false) == true); }
+    function myPlayers() { return isApproved() ? myMember().get('players', []) : []; }
+
+    // Who owns this scorebook. Claimable once, by the first signed-in account; never changed after.
+    match /config/setup {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.keys().hasOnly(['owner', 'createdAt']);
+    }
+
+    // The "who can watch" switch. Everyone may read it so the page knows whether to ask for a sign-in.
+    match /config/access {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['publicView'])
+        && request.resource.data.publicView is bool;
+    }
+
+    // Player birthdays: { dates: { playerId: 'YYYY-MM-DD' } }. Coaches only; the Worker reads it
+    // with the service account to post "Happy Birthday" announcements.
+    match /config/birthdays {
+      allow read, write: if isAdmin();
+    }
+
+    // Cloudflare Worker address and access code, shared with coaches and camera operators.
+    match /config/worker {
+      allow read: if isAdmin() || isCamera();
+      allow create, update: if isAdmin() && request.resource.data.keys().hasOnly(['url', 'code']);
+      allow delete: if isAdmin();
+    }
+
+    // Watch links. Any approved member can make one for their family; they see and turn off their own,
+    // coaches see and turn off all of them. Knowing the token is what lets someone open it.
+    match /invites/{token} {
+      allow get: if true;
+      allow list: if isAdmin() || (signedIn() && resource.data.by == request.auth.uid);
+      allow create: if (isApproved() || isAdmin()) && token.size() >= 24
+        && request.resource.data.keys().hasOnly(['by', 'byName', 'name', 'at'])
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.byName is string && request.resource.data.byName.size() <= 60
+        && request.resource.data.name is string && request.resource.data.name.size() <= 60
+        && request.resource.data.at == request.time;
+      allow delete: if isAdmin() || (signedIn() && resource.data.by == request.auth.uid);
+    }
+    match /guests/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['token', 'at'])
+        && request.resource.data.token is string
+        && exists(docPath('invites', request.resource.data.token));
+      allow delete: if signedIn() && (request.auth.uid == uid || isAdmin());
+    }
+
+    // Accounts. A person may only ask for family access for themselves; coaches decide everything else.
+    match /members/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.role == 'parent'
+        && request.resource.data.status == 'pending'
+        && request.resource.data.keys().hasOnly(['name', 'email', 'note', 'role', 'status', 'createdAt']);
+      // Coaches manage accounts, but only the owner decides who can see fees.
+      allow create: if isOwner() || (isAdmin() && !request.resource.data.keys().hasAny(['fees']));
+      allow update: if isOwner() || (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['fees']));
+      allow delete: if isAdmin();
+    }
+
+    // Team data: roster and settings, games, opponent rosters.
+    match /team/{id} {
+      allow read: if canView();
+      allow write: if isAdmin();
+    }
+    // Which game is streaming from the built-in camera. Camera operators may update it too.
+    match /team/stream {
+      allow create, update: if isCamera()
+        && request.resource.data.keys().hasOnly(['gid', 'uid', 'whep', 'live', 'startedAt', 'endedAt']);
+    }
+    match /games/{id} {
+      allow read: if canView();
+      allow write: if isAdmin();
+      allow create, update: if isScorer();
+      // Camera operators may only attach the replay link.
+      allow update: if isCamera()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['video', 'updatedAt']);
+    }
+    match /opponents/{id} {
+      allow read: if canView();
+      allow write: if isAdmin();
+      allow create, update: if isScorer();
+    }
+    // Phones that asked for notifications. Each person manages only their own; the Worker reads
+    // them with the service account.
+    match /pushTokens/{id} {
+      allow get: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create: if (isApproved() || isAdmin())
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'token', 'chat', 'scores', 'at'])
+        && request.resource.data.scores in ['off', 'runs', 'all'];
+      allow update: if (isApproved() || isAdmin()) && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'token', 'chat', 'scores', 'at'])
+        && request.resource.data.scores in ['off', 'runs', 'all'];
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // Where families send money: the owner's Venmo and Cash App.
+    match /config/pay {
+      allow read: if isApproved() || isAdmin();
+      allow write: if isOwner()
+        && request.resource.data.keys().hasOnly(['venmo', 'cashapp'])
+        && request.resource.data.venmo is string && request.resource.data.venmo.size() <= 40
+        && request.resource.data.cashapp is string && request.resource.data.cashapp.size() <= 40;
+    }
+
+    // Tournament fees. Families can read a fee (name, amount, due date) so they can pay it.
+    match /fees/{id} {
+      allow read: if isApproved() || isAdmin();
+      allow create, update: if feeAccess()
+        && request.resource.data.keys().hasOnly(['name', 'when', 'where', 'amount', 'due', 'players', 'createdAt', 'updatedAt'])
+        && request.resource.data.amount is int && request.resource.data.amount > 0 && request.resource.data.amount <= 100000
+        && request.resource.data.players is list;
+      allow delete: if feeAccess();
+
+      // One doc per player who has paid or says they paid.
+      match /pay/{pid} {
+        allow read: if feeAccess() || pid in myPlayers();
+        allow create, update: if feeAccess()
+          && request.resource.data.keys().hasOnly(['status', 'method', 'amount', 'by', 'at', 'confirmedBy', 'confirmedAt', 'note'])
+          && request.resource.data.status in ['paid', 'claimed']
+          && request.resource.data.method in ['venmo', 'cashapp'];
+        // A family can only say they paid (a coach confirms), for their own player.
+        allow create: if pid in myPlayers()
+          && request.resource.data.keys().hasOnly(['status', 'method', 'amount', 'by', 'at'])
+          && request.resource.data.status == 'claimed'
+          && request.resource.data.method in ['venmo', 'cashapp']
+          && request.resource.data.by == request.auth.uid;
+        // Fee managers can undo any payment; a family can only take back their own "I paid".
+        allow delete: if feeAccess()
+          || (pid in myPlayers() && resource.data.status == 'claimed');
+      }
+    }
+
+    // Announcements: only coaches (and the owner) post, edit or delete; every approved member reads.
+    match /announcements/{id} {
+      allow read: if isApproved() || isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'text', 'at'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.name is string && request.resource.data.name.size() <= 60
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
+        && request.resource.data.at == request.time;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'edited'])
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
+        && request.resource.data.edited is int;
+      allow delete: if isAdmin();
+    }
+
+    // Swing AI. swings/{id} is one analyzed swing or scouted ball in play; swingMedia/{id} holds
+    // its snapshot and keypoints. pid = one of our players, opp = an opponent roster key.
+    // Coaches see and manage everything. A family sees their linked players' swings and can
+    // save, change or delete the ones they added for their own player (never opponents).
+    function swingFamily(d) { return d.pid is string && d.pid != '' && d.pid in myPlayers(); }
+    function swingShape(d) {
+      return d.pid is string && d.opp is string && d.by is string
+        && d.pid.size() <= 64 && d.opp.size() <= 70 && (d.pid == '' || d.opp == '');
+    }
+    match /swings/{id} {
+      allow read: if isAdmin() || swingFamily(resource.data);
+      allow create: if signedIn() && request.resource.data.by == request.auth.uid
+        && swingShape(request.resource.data)
+        && request.resource.data.keys().hasOnly(['pid', 'opp', 'oppName', 'hitterKey', 'hitter', 'bats', 'outcome', 'swing', 'features', 'ball', 'prediction', 'auto', 'source', 'game', 'count', 'inning', 'clip', 'needsReview', 'by', 'createdAt', 'updatedAt'])
+        && (isAdmin() || (swingFamily(request.resource.data) && request.resource.data.opp == ''));
+      allow update: if swingShape(request.resource.data)
+        && request.resource.data.by == resource.data.by
+        && request.resource.data.pid == resource.data.pid && request.resource.data.opp == resource.data.opp
+        && (isAdmin() || (resource.data.by == request.auth.uid && swingFamily(resource.data)));
+      allow delete: if isAdmin() || (resource.data.by == request.auth.uid && swingFamily(resource.data));
+    }
+    match /swingMedia/{id} {
+      allow read: if isAdmin() || swingFamily(resource.data);
+      allow create: if signedIn() && request.resource.data.by == request.auth.uid
+        && swingShape(request.resource.data)
+        && request.resource.data.keys().hasOnly(['pid', 'opp', 'by', 'thumb', 'series', 'track', 'frames', 'events'])
+        && (isAdmin() || (swingFamily(request.resource.data) && request.resource.data.opp == ''));
+      allow delete: if isAdmin() || (resource.data.by == request.auth.uid && swingFamily(resource.data));
+    }
+
+    // Each person's own chat settings: who they muted (a map of uid -> name). Private to them;
+    // the Worker reads it with the service account to skip notifications from muted people.
+    match /prefs/{uid} {
+      allow read, delete: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid && (isApproved() || isAdmin())
+        && request.resource.data.keys().hasOnly(['mute', 'updatedAt'])
+        && request.resource.data.mute is map && request.resource.data.mute.size() <= 300;
+    }
+
+    // Team chat: one group conversation for signed-in, approved members (not link-only viewers).
+    match /messages/{id} {
+      allow read: if isApproved() || isAdmin();
+      allow create: if (isApproved() || isAdmin())
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'text', 'coach', 'at'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.name is string && request.resource.data.name.size() <= 60
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000
+        && request.resource.data.coach == isAdmin()
+        && request.resource.data.at == request.time;
+      allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      // Reactions: react is a map of uid -> 'up' | 'down' | 'heart' | 'ball'. Each person can only
+      // add, change or remove their own, and nothing else about the message changes.
+      allow update: if (isApproved() || isAdmin())
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['react'])
+        && request.resource.data.get('react', {}) is map
+        && request.resource.data.get('react', {}).diff(resource.data.get('react', {})).affectedKeys().hasOnly([request.auth.uid])
+        && (!(request.auth.uid in request.resource.data.get('react', {}))
+          || request.resource.data.react[request.auth.uid] in ['up', 'down', 'heart', 'ball']);
+    }
+
+    // Multi-team product data.
+    match /teams/{teamId} {
+  
+      function signedIn() { return request.auth != null; }
+      function docPath(col, id) { return /databases/$(database)/documents/teams/$(teamId)/$(col)/$(id); }
+      function isOwner() {
+        return signedIn() && exists(docPath('config', 'setup'))
+          && get(docPath('config', 'setup')).data.owner == request.auth.uid;
+      }
+      function myMember() { return get(docPath('members', request.auth.uid)).data; }
+      function isApproved() {
+        return signedIn() && exists(docPath('members', request.auth.uid)) && myMember().status == 'approved';
+      }
+      function isAdmin() { return isOwner() || (isApproved() && myMember().role == 'admin'); }
+      function isCamera() { return isApproved() && myMember().role == 'camera'; }
+      function isScorer() { return isApproved() && myMember().role == 'scorer'; }
+      function publicView() {
+        return exists(docPath('config', 'access')) && get(docPath('config', 'access')).data.publicView == true;
+      }
+      // Guests: family someone invited with a watch link. invites/{token} is the link (a long random
+      // token), guests/{uid} is the anonymous sign-in that opened it. They can watch while the invite
+      // exists; turning the invite off (deleting it) ends it.
+      function isGuest() {
+        return signedIn() && exists(docPath('guests', request.auth.uid))
+          && exists(docPath('invites', get(docPath('guests', request.auth.uid)).data.token));
+      }
+      function canView() { return publicView() || isApproved() || isAdmin() || isGuest(); }
+      function feeAccess() { return isOwner() || (isApproved() && myMember().get('fees', false) == true); }
+      function myPlayers() { return isApproved() ? myMember().get('players', []) : []; }
+  
+      // Who owns this scorebook. Claimable once, by the first signed-in account; never changed after.
+      match /config/setup {
+        allow read: if true;
+        allow create: if signedIn()
+          && request.resource.data.owner == request.auth.uid
+          && request.resource.data.keys().hasOnly(['owner', 'createdAt']);
+      }
+  
+      // The "who can watch" switch. Everyone may read it so the page knows whether to ask for a sign-in.
+      match /config/access {
+        allow read: if true;
+        allow write: if isAdmin()
+          && request.resource.data.keys().hasOnly(['publicView'])
+          && request.resource.data.publicView is bool;
+      }
+  
+      // Player birthdays: { dates: { playerId: 'YYYY-MM-DD' } }. Coaches only; the Worker reads it
+      // with the service account to post "Happy Birthday" announcements.
+      match /config/birthdays {
+        allow read, write: if isAdmin();
+      }
+  
+      // Cloudflare Worker address and access code, shared with coaches and camera operators.
+      match /config/worker {
+        allow read: if isAdmin() || isCamera();
+        allow create, update: if isAdmin() && request.resource.data.keys().hasOnly(['url', 'code']);
+        allow delete: if isAdmin();
+      }
+  
+      // Watch links. Any approved member can make one for their family; they see and turn off their own,
+      // coaches see and turn off all of them. Knowing the token is what lets someone open it.
+      match /invites/{token} {
+        allow get: if true;
+        allow list: if isAdmin() || (signedIn() && resource.data.by == request.auth.uid);
+        allow create: if (isApproved() || isAdmin()) && token.size() >= 24
+          && request.resource.data.keys().hasOnly(['by', 'byName', 'name', 'at'])
+          && request.resource.data.by == request.auth.uid
+          && request.resource.data.byName is string && request.resource.data.byName.size() <= 60
+          && request.resource.data.name is string && request.resource.data.name.size() <= 60
+          && request.resource.data.at == request.time;
+        allow delete: if isAdmin() || (signedIn() && resource.data.by == request.auth.uid);
+      }
+      match /guests/{uid} {
+        allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+        allow create, update: if signedIn() && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['token', 'at'])
+          && request.resource.data.token is string
+          && exists(docPath('invites', request.resource.data.token));
+        allow delete: if signedIn() && (request.auth.uid == uid || isAdmin());
+      }
+  
+      // Accounts. A person may only ask for family access for themselves; coaches decide everything else.
+      match /members/{uid} {
+        allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+        allow create: if signedIn() && request.auth.uid == uid
+          && request.resource.data.role == 'parent'
+          && request.resource.data.status == 'pending'
+          && request.resource.data.keys().hasOnly(['name', 'email', 'note', 'role', 'status', 'createdAt']);
+        // Coaches manage accounts, but only the owner decides who can see fees.
+        allow create: if isOwner() || (isAdmin() && !request.resource.data.keys().hasAny(['fees']));
+        allow update: if isOwner() || (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['fees']));
+        allow delete: if isAdmin();
+      }
+  
+      // Team data: roster and settings, games, opponent rosters.
+      match /team/{id} {
+        allow read: if canView();
+        allow write: if isAdmin();
+      }
+      // Which game is streaming from the built-in camera. Camera operators may update it too.
+      match /team/stream {
+        allow create, update: if isCamera()
+          && request.resource.data.keys().hasOnly(['gid', 'uid', 'whep', 'live', 'startedAt', 'endedAt']);
+      }
+      match /games/{id} {
+        allow read: if canView();
+        allow write: if isAdmin();
+        allow create, update: if isScorer();
+        // Camera operators may only attach the replay link.
+        allow update: if isCamera()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['video', 'updatedAt']);
+      }
+      match /opponents/{id} {
+        allow read: if canView();
+        allow write: if isAdmin();
+        allow create, update: if isScorer();
+      }
+      // Phones that asked for notifications. Each person manages only their own; the Worker reads
+      // them with the service account.
+      match /pushTokens/{id} {
+        allow get: if signedIn() && resource.data.uid == request.auth.uid;
+        allow create: if (isApproved() || isAdmin())
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['uid', 'token', 'chat', 'scores', 'at'])
+          && request.resource.data.scores in ['off', 'runs', 'all'];
+        allow update: if (isApproved() || isAdmin()) && resource.data.uid == request.auth.uid
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['uid', 'token', 'chat', 'scores', 'at'])
+          && request.resource.data.scores in ['off', 'runs', 'all'];
+        allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      }
+  
+      // Where families send money: the owner's Venmo and Cash App.
+      match /config/pay {
+        allow read: if isApproved() || isAdmin();
+        allow write: if isOwner()
+          && request.resource.data.keys().hasOnly(['venmo', 'cashapp'])
+          && request.resource.data.venmo is string && request.resource.data.venmo.size() <= 40
+          && request.resource.data.cashapp is string && request.resource.data.cashapp.size() <= 40;
+      }
+  
+      // Tournament fees. Families can read a fee (name, amount, due date) so they can pay it.
+      match /fees/{id} {
+        allow read: if isApproved() || isAdmin();
+        allow create, update: if feeAccess()
+          && request.resource.data.keys().hasOnly(['name', 'when', 'where', 'amount', 'due', 'players', 'createdAt', 'updatedAt'])
+          && request.resource.data.amount is int && request.resource.data.amount > 0 && request.resource.data.amount <= 100000
+          && request.resource.data.players is list;
+        allow delete: if feeAccess();
+  
+        // One doc per player who has paid or says they paid.
+        match /pay/{pid} {
+          allow read: if feeAccess() || pid in myPlayers();
+          allow create, update: if feeAccess()
+            && request.resource.data.keys().hasOnly(['status', 'method', 'amount', 'by', 'at', 'confirmedBy', 'confirmedAt', 'note'])
+            && request.resource.data.status in ['paid', 'claimed']
+            && request.resource.data.method in ['venmo', 'cashapp'];
+          // A family can only say they paid (a coach confirms), for their own player.
+          allow create: if pid in myPlayers()
+            && request.resource.data.keys().hasOnly(['status', 'method', 'amount', 'by', 'at'])
+            && request.resource.data.status == 'claimed'
+            && request.resource.data.method in ['venmo', 'cashapp']
+            && request.resource.data.by == request.auth.uid;
+          // Fee managers can undo any payment; a family can only take back their own "I paid".
+          allow delete: if feeAccess()
+            || (pid in myPlayers() && resource.data.status == 'claimed');
+        }
+      }
+  
+      // Announcements: only coaches (and the owner) post, edit or delete; every approved member reads.
+      match /announcements/{id} {
+        allow read: if isApproved() || isAdmin();
+        allow create: if isAdmin()
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'text', 'at'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.name is string && request.resource.data.name.size() <= 60
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
+          && request.resource.data.at == request.time;
+        allow update: if isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'edited'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
+          && request.resource.data.edited is int;
+        allow delete: if isAdmin();
+      }
+  
+      // Swing AI. swings/{id} is one analyzed swing or scouted ball in play; swingMedia/{id} holds
+      // its snapshot and keypoints. pid = one of our players, opp = an opponent roster key.
+      // Coaches see and manage everything. A family sees their linked players' swings and can
+      // save, change or delete the ones they added for their own player (never opponents).
+      function swingFamily(d) { return d.pid is string && d.pid != '' && d.pid in myPlayers(); }
+      function swingShape(d) {
+        return d.pid is string && d.opp is string && d.by is string
+          && d.pid.size() <= 64 && d.opp.size() <= 70 && (d.pid == '' || d.opp == '');
+      }
+      match /swings/{id} {
+        allow read: if isAdmin() || swingFamily(resource.data);
+        allow create: if signedIn() && request.resource.data.by == request.auth.uid
+          && swingShape(request.resource.data)
+          && request.resource.data.keys().hasOnly(['pid', 'opp', 'oppName', 'hitterKey', 'hitter', 'bats', 'outcome', 'swing', 'features', 'ball', 'prediction', 'auto', 'source', 'game', 'count', 'inning', 'clip', 'needsReview', 'by', 'createdAt', 'updatedAt'])
+          && (isAdmin() || (swingFamily(request.resource.data) && request.resource.data.opp == ''));
+        allow update: if swingShape(request.resource.data)
+          && request.resource.data.by == resource.data.by
+          && request.resource.data.pid == resource.data.pid && request.resource.data.opp == resource.data.opp
+          && (isAdmin() || (resource.data.by == request.auth.uid && swingFamily(resource.data)));
+        allow delete: if isAdmin() || (resource.data.by == request.auth.uid && swingFamily(resource.data));
+      }
+      match /swingMedia/{id} {
+        allow read: if isAdmin() || swingFamily(resource.data);
+        allow create: if signedIn() && request.resource.data.by == request.auth.uid
+          && swingShape(request.resource.data)
+          && request.resource.data.keys().hasOnly(['pid', 'opp', 'by', 'thumb', 'series', 'track', 'frames', 'events'])
+          && (isAdmin() || (swingFamily(request.resource.data) && request.resource.data.opp == ''));
+        allow delete: if isAdmin() || (resource.data.by == request.auth.uid && swingFamily(resource.data));
+      }
+  
+      // Each person's own chat settings: who they muted (a map of uid -> name). Private to them;
+      // the Worker reads it with the service account to skip notifications from muted people.
+      match /prefs/{uid} {
+        allow read, delete: if signedIn() && request.auth.uid == uid;
+        allow create, update: if signedIn() && request.auth.uid == uid && (isApproved() || isAdmin())
+          && request.resource.data.keys().hasOnly(['mute', 'updatedAt'])
+          && request.resource.data.mute is map && request.resource.data.mute.size() <= 300;
+      }
+  
+      // Team chat: one group conversation for signed-in, approved members (not link-only viewers).
+      match /messages/{id} {
+        allow read: if isApproved() || isAdmin();
+        allow create: if (isApproved() || isAdmin())
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'text', 'coach', 'at'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.name is string && request.resource.data.name.size() <= 60
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000
+          && request.resource.data.coach == isAdmin()
+          && request.resource.data.at == request.time;
+        allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+        // Reactions: react is a map of uid -> 'up' | 'down' | 'heart' | 'ball'. Each person can only
+        // add, change or remove their own, and nothing else about the message changes.
+        allow update: if (isApproved() || isAdmin())
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['react'])
+          && request.resource.data.get('react', {}) is map
+          && request.resource.data.get('react', {}).diff(resource.data.get('react', {})).affectedKeys().hasOnly([request.auth.uid])
+          && (!(request.auth.uid in request.resource.data.get('react', {}))
+            || request.resource.data.react[request.auth.uid] in ['up', 'down', 'heart', 'ball']);
+      }
+    }
+  }
+}
