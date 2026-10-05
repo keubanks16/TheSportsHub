@@ -1,7 +1,7 @@
 {
-  "name": "The Sports Hub",
-  "short_name": "Sports Hub",
-  "description": "Live scoring, video, stats, scouting and team communication for baseball teams.",
+  "name": "The Hub",
+  "short_name": "The Hub",
+  "description": "The Hub baseball and softball team platform",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

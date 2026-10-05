@@ -1,4 +1,4 @@
-// The Sports Hub: Defense Drills. A retro 8-bit field that plays out where every fielder goes
+// The Hub: Defense Drills. A retro 8-bit field that plays out where every fielder goes
 // on a ball in play, plus a "Where do you go?" quiz. Standard youth positioning; coaches can teach
 // it differently. Mounted by index.html (Instincts tab) with mount(root, hub) / unmount().
 

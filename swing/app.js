@@ -1,4 +1,4 @@
-// The Sports Hub · Swing AI
+// The Hub · Swing AI
 //
 // Analyze a swing from a clip, keep every player's swings, scout a whole game video, and call
 // where each hitter is likely to hit it next. The tracking runs on the phone (MoveNet pose model
@@ -7,7 +7,7 @@
 // the `hub` object handed to mount()).
 //
 // The engine files next to this one (swing.js, scout.js, field.js, overlay.js, model.js, pose.js)
-// come unchanged from Sports Hub Scout.
+// come unchanged from The Hub Scout.
 
 import { EDGES, analyzeSwing, waitFrame, packFrames, unpackFrames } from './swing.js';
 import * as M from './model.js';

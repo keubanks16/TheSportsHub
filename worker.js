@@ -1,7 +1,7 @@
-// The Sports Hub helper (Cloudflare Worker).
+// The Hub helper (Cloudflare Worker).
 //
 // The scorebook is a public website, so secret keys can't live in it. This Worker keeps
-// them on Cloudflare and does these jobs for The Sports Hub:
+// them on Cloudflare and does these jobs for The Hub:
 //   roster  read a roster photo
 //   scout   write a scouting report
 //   live-start / live-end   open and close a private Cloudflare Stream for the camera phone
@@ -145,7 +145,7 @@ async function stream(task, body, env, reply) {
   };
   try {
     if (task === 'live-start') {
-      const name = String(body.name || 'Sports Hub game').slice(0, 100);
+      const name = String(body.name || 'The Hub game').slice(0, 100);
       const r = await fetch(base, { method: 'POST', headers, body: JSON.stringify({ meta: { name }, recording: { mode: 'off' } }) });
       if (!r.ok) return fail(r);
       const data = await r.json();
@@ -511,7 +511,7 @@ async function notifyRun(env, self, site, teamId) {
     if (first) continue;
     const L = line(g, sum), link = site + '/?team=' + encodeURIComponent(cleanTeamId(teamId) || 'gs-baseball') + '#live', tag = 'game-' + g._id;
     const where = (sum.half ? 'Bottom ' : 'Top ') + ORDN(sum.i);
-    if (!prev) { out.push({ kind: 'score', level: 'runs', title: teamName + (g.home ? ' vs ' : ' at ') + (g.opponent || 'Opponent') + ' is underway', body: 'Follow it live in The Sports Hub.', tag, link }); continue; }
+    if (!prev) { out.push({ kind: 'score', level: 'runs', title: teamName + (g.home ? ' vs ' : ' at ') + (g.opponent || 'Opponent') + ' is underway', body: 'Follow it live in The Hub.', tag, link }); continue; }
     const runs = prev.a !== sum.a || prev.h !== sum.h;
     const turned = prev.i !== sum.i || prev.half !== sum.half;
     if (runs) out.push({ kind: 'score', level: 'runs', title: 'Run scores! ' + L.text, body: turned ? (sum.half ? 'Middle of the ' + ORDN(sum.i) : 'End of the ' + ORDN(sum.i - 1)) : where + ', ' + (sum.o || 0) + ' out' + (sum.o === 1 ? '' : 's'), tag, link });

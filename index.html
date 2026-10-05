@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <style>html{background:#0B2753}:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;min-height:100vh;min-height:100dvh}img{max-width:100%}[hidden]{display:none!important}</style>
-<title>The Sports Hub</title>
+<title>The Hub</title>
 <meta name="theme-color" content="#0B2753">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Sports Hub">
+<meta name="apple-mobile-web-app-title" content="The Hub">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -791,8 +791,8 @@ body.viewer-on { overflow: hidden; }
 <div id="sheet-root"></div>
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script>window.GS_FIREBASE = {"apiKey": "AIzaSyBfTjGdAr9nXPEp30X7c9Ot01fT5oGV7_0", "authDomain": "stingerz-scorebook.firebaseapp.com", "projectId": "stingerz-scorebook", "storageBucket": "stingerz-scorebook.firebasestorage.app", "messagingSenderId": "667344236029", "appId": "1:667344236029:web:9f1372d2e6d96321587d94", "vapidKey": "BL5bz0Z2pYw73rODslcmUSpM2AW56foHvq9NKud8OxpHI3M0rcMBszRYSuiSvx9XJAP8LKFAUrAJBliJrboYkEg"};</script>
-<script>/* The Sports Hub baseball scoring engine: replays a game's event log into game state and stats. */
+<script>window.GS_FIREBASE = {"apiKey":"AIzaSyDth-zgyTD4F8kzCyXKgrYWX_0YvwEgGYg","authDomain":"the-sports-hub-57584.firebaseapp.com","projectId":"the-sports-hub-57584","storageBucket":"the-sports-hub-57584.firebasestorage.app","messagingSenderId":"1047135905440","appId":"1:1047135905440:web:abbf487cda014269010bc5"};</script>
+<script>/* The Hub baseball scoring engine: replays a game's event log into game state and stats. */
 (function (root) {
   'use strict';
 
@@ -1254,7 +1254,7 @@ body.viewer-on { overflow: hidden; }
   const UI = { tab: 'games', gameId: null, gameTab: 'box', sprayWho: 'us', statsMode: 'bat', sort: { bat: 'PA', pit: 'OUTS' }, scoutOpp: null, scoutKey: '*', sprayMode: 'dots', liveId: null, readOnly: false, canWrite: null, ready: false, sheet: null, ai: {} };
   const Caps = { sample: null, downloads: null };
 
-  // ---------- The Sports Hub: multi-team context ----------
+  // ---------- The Hub: multi-team context ----------
   // Every cloud path is scoped beneath teams/{TEAM_ID}. A team can be selected with ?team=slug;
   // the selection is remembered on this device. This is the isolation boundary between customers.
   const TEAM_KEY = 'sports-hub-team-id';
@@ -1515,7 +1515,7 @@ body.viewer-on { overflow: hidden; }
     try {
       [appMod, FB.A, FB.F] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')]);
     } catch (e) {
-      $('#view').innerHTML = `<div class="card empty"><img src="${LOGO}" alt=""><h3>Can't reach The Sports Hub</h3><p>Check your internet connection, then reload.</p></div>`;
+      $('#view').innerHTML = `<div class="card empty"><img src="${LOGO}" alt=""><h3>Can't reach The Hub</h3><p>Check your internet connection, then reload.</p></div>`;
       return;
     }
     const app = appMod.initializeApp(cfg);
@@ -3807,7 +3807,7 @@ body.viewer-on { overflow: hidden; }
     if (canManage()) {
       const rs = Object.entries(Data.opponents).sort((a, b) => a[1].name.localeCompare(b[1].name));
       h += `<h2 class="sec">Opponent rosters <button class="btn ghost sm" data-act="roster">+ Add roster</button></h2>`;
-      if (!rs.length) h += `<div class="card empty" style="padding:20px"><p>${Caps.sample ? 'Take a photo or screenshot of another team\'s roster and The Sports Hub reads the names and numbers into it.' : 'Save each opponent\'s roster so lineups and scouting show names, not just numbers.'}</p><button class="btn primary" data-act="roster">+ Add roster</button></div>`;
+      if (!rs.length) h += `<div class="card empty" style="padding:20px"><p>${Caps.sample ? 'Take a photo or screenshot of another team\'s roster and The Hub reads the names and numbers into it.' : 'Save each opponent\'s roster so lineups and scouting show names, not just numbers.'}</p><button class="btn primary" data-act="roster">+ Add roster</button></div>`;
       else h += `<div class="card roster">${rs.map(([k, r]) => `<button class="player" data-act="roster" data-key="${esc(k)}"><span class="no" style="font-size:16px">${esc((r.name || '?').slice(0, 3).toUpperCase())}</span><span style="min-width:0"><span class="nm">${esc(r.name)}</span><span class="meta">${r.players.length} player${r.players.length === 1 ? '' : 's'}${r.spray && r.spray.players && r.spray.players.length ? ' · spray chart' : ''}${r.updatedAt ? ' · updated ' + esc(new Date(r.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) : ''}</span></span><span class="meta">Edit</span></button>`).join('')}</div>`;
     }
     h += invitesHTML() + accountHTML() + familiesHTML();
@@ -4104,8 +4104,8 @@ body.viewer-on { overflow: hidden; }
           ? `<div><span class="field-lbl">Opponent</span><div class="sp-opp">${esc(sh.name)}</div></div>`
           : `<label><span class="field-lbl">Opponent</span>${inp('name', sh.name, 'list="sp-opps" autocomplete="off" placeholder="Team name"')}<datalist id="sp-opps">${names.map((n) => `<option value="${esc(n)}">`).join('')}</datalist></label>`;
         h += us
-          ? `<p class="small muted" style="margin:0">Use screenshots of a spray chart report that shows each hitter's name and the dots where their balls in play went. The Sports Hub reads every hitter, matches them to your roster, and adds the balls to your players' spray charts on the Stats tab. You check everything before it's saved.</p>`
-          : `<p class="small muted" style="margin:0">Use screenshots of a spray chart report that shows each hitter's name and the dots where their balls in play went. The Sports Hub reads every hitter, matches them to this team's roster, and adds the balls to the Scout tab. You check everything before it's saved.</p>`;
+          ? `<p class="small muted" style="margin:0">Use screenshots of a spray chart report that shows each hitter's name and the dots where their balls in play went. The Hub reads every hitter, matches them to your roster, and adds the balls to your players' spray charts on the Stats tab. You check everything before it's saved.</p>`
+          : `<p class="small muted" style="margin:0">Use screenshots of a spray chart report that shows each hitter's name and the dots where their balls in play went. The Hub reads every hitter, matches them to this team's roster, and adds the balls to the Scout tab. You check everything before it's saved.</p>`;
         if (sh.busy) h += `<div class="scan"><span class="spin" aria-hidden="true"></span><span class="grow">Reading every hitter's chart. This can take a minute.${sh.busy.note ? ' ' + esc(sh.busy.note) : ''}</span><button class="btn sm" data-act="sprayStop">Stop</button></div>`;
         else h += `<div><label class="btn primary scan-btn">${CAMERA}<span>Choose spray chart screenshots</span><input class="vh" type="file" accept="image/*" multiple data-spray="1"></label></div>`;
         if (sh.err) h += `<div class="warn-text">${esc(sh.err)}</div>`;
@@ -4192,7 +4192,7 @@ body.viewer-on { overflow: hidden; }
     ai(sh) {
       const t = sh.test;
       const status = !t ? '' : t.busy ? '<div class="scan"><span class="spin" aria-hidden="true"></span><span>Checking the connection…</span></div>' : t.ok ? '<div class="small" style="color:var(--good);font-weight:600">Connected. Your Worker answered.</div>' : `<div class="warn-text">${esc(t.err)}</div>`;
-      return head('Cloudflare Worker') + `<p class="small muted" style="margin:0">Roster photo scanning, scouting reports and live video go through your Cloudflare Worker, which keeps your keys off this public site. <a href="https://github.com/keubanks16/TheSportsHub#cloudflare-worker" target="_blank" rel="noopener">Setup steps</a></p>
+      return head('Cloudflare Worker') + `<p class="small muted" style="margin:0">Roster photo scanning, scouting reports and live video go through your Cloudflare Worker, which keeps your keys off this public site. <a href="https://github.com/keubanks16/TheHub#cloudflare-worker" target="_blank" rel="noopener">Setup steps</a></p>
         <label><span class="field-lbl">Worker address</span>${inp('url', sh.url, 'type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://gs-scorebook-ai.yourname.workers.dev"')}</label>
         <label><span class="field-lbl">Access code</span>${inp('code', sh.code, 'autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="The ACCESS_CODE you set in the Worker"')}</label>
         ${status}
@@ -4207,7 +4207,7 @@ body.viewer-on { overflow: hidden; }
         <div class="row"><button class="btn primary" data-act="videoSave">Save</button>${Data.team.video ? '<button class="btn danger" data-act="videoClear">Remove</button>' : '<button class="btn" data-act="close">Cancel</button>'}</div>`;
     },
     yt(sh) {
-      return head('YouTube uploads') + `<p class="small muted" style="margin:0">When a stream ends, the camera phone uploads the game video to the YouTube channel of the Google account that signs in. <a href="https://github.com/keubanks16/TheSportsHub#youtube-uploads" target="_blank" rel="noopener">Setup steps</a></p>
+      return head('YouTube uploads') + `<p class="small muted" style="margin:0">When a stream ends, the camera phone uploads the game video to the YouTube channel of the Google account that signs in. <a href="https://github.com/keubanks16/TheHub#youtube-uploads" target="_blank" rel="noopener">Setup steps</a></p>
         <label><span class="field-lbl">Google OAuth client ID</span>${inp('clientId', sh.clientId, 'autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="1234-abc.apps.googleusercontent.com"')}</label>
         <div><span class="field-lbl">Upload automatically when a stream ends</span>${segB('ytAuto', sh.auto ? 'on' : 'off', [['on', 'On'], ['off', 'Off']])}</div>
         <div><span class="field-lbl">Add the replay to the game page</span>${segB('ytAttach', sh.attach ? 'on' : 'off', [['on', 'On'], ['off', 'Off']])}</div>
@@ -4374,7 +4374,7 @@ body.viewer-on { overflow: hidden; }
     return { title: title ? title[1] : '', legend: {}, players };
   }
   const SPRAY_ALIAS = { P: 'P', PITCHER: 'P', C: 'C', CATCHER: 'C', '1B': '1B', FIRST: '1B', FIRSTBASE: '1B', '2B': '2B', SECOND: '2B', SECONDBASE: '2B', SS: 'SS', SHORTSTOP: 'SS', '3B': '3B', THIRD: '3B', THIRDBASE: '3B', LF: 'LF', LEFTFIELD: 'LF', LCF: 'LF', CF: 'CF', CENTERFIELD: 'CF', RF: 'RF', RIGHTFIELD: 'RF', RCF: 'RF' };
-  // Dot colors mean contact type on The Sports Hub charts: green = pop up, red = ground ball,
+  // Dot colors mean contact type on The Hub charts: green = pop up, red = ground ball,
   // gold = line drive. A chart with its own color key can say otherwise, including hit/out/error.
   function sprayColorMap(legend) {
     const map = { green: { bt: 'P' }, red: { bt: 'G' }, gold: { bt: 'L' }, yellow: { bt: 'L' }, orange: { bt: 'L' } };
@@ -6102,7 +6102,7 @@ body.viewer-on { overflow: hidden; }
           const g = meta.gid && Data.games[meta.gid];
           let title = Data.team.name + ' ' + (g ? camGameName(g) : meta.title || 'game');
           if (meta.part > 1) title += ' (part ' + meta.part + ')';
-          const desc = g ? (g.home ? Data.team.name + ' vs ' + g.opponent : Data.team.name + ' at ' + g.opponent) + (g.location ? ', ' + g.location : '') + ', ' + longDate(g.date) + '. Recorded with The Sports Hub.' : 'Recorded with The Sports Hub.';
+          const desc = g ? (g.home ? Data.team.name + ' vs ' + g.opponent : Data.team.name + ' at ' + g.opponent) + (g.location ? ', ' + g.location : '') + ', ' + longDate(g.date) + '. Recorded with The Hub.' : 'Recorded with The Hub.';
           const r = await ytXhr('POST', 'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status',
             Object.assign({ 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Length': String(total), 'X-Upload-Content-Type': type }, auth()),
             JSON.stringify({ snippet: { title: title.slice(0, 100), description: desc.slice(0, 4900), categoryId: '17' }, status: { privacyStatus: 'unlisted' } }));
@@ -6324,8 +6324,8 @@ body.viewer-on { overflow: hidden; }
     const reader = new FileReader();
     reader.onload = () => {
       let d;
-      try { d = JSON.parse(reader.result); } catch (e) { toast("That file isn't a Sports Hub backup."); return; }
-      if (!d || !['gs-baseball','the-sports-hub'].includes(d.app) || !Array.isArray(d.games)) { toast("That file isn't a Sports Hub backup."); return; }
+      try { d = JSON.parse(reader.result); } catch (e) { toast("That file isn't a The Hub backup."); return; }
+      if (!d || !['gs-baseball','the-sports-hub'].includes(d.app) || !Array.isArray(d.games)) { toast("That file isn't a The Hub backup."); return; }
       confirmSheet('Import this backup?', `It has ${d.games.length} game${d.games.length === 1 ? '' : 's'} and ${(d.team && d.team.players || []).length} players. Games with the same ID are replaced, and the roster is replaced by the one in the backup.`, 'Import', () => {
         Data.team = normTeam(d.team);
         saveTeam();
@@ -6387,7 +6387,7 @@ body.viewer-on { overflow: hidden; }
       if (!Saver.busy('team/main')) Data.team = normTeam(snap.exists ? clone(snap.data()) : null);
       Data.loaded.team = true;
       applyTeamBrand(Data.team);
-      document.title = (Data.team.name || 'My Team') + ' | The Sports Hub';
+      document.title = (Data.team.name || 'My Team') + ' | The Hub';
       maybeReady();
     }, onDbError));
     subs.push(db.collection('games').onSnapshot((snap) => {

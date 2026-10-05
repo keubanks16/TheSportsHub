@@ -1,4 +1,4 @@
-# The Sports Hub — first deployment
+# The Hub — first deployment
 
 This build is multi-team. New customer data is stored under `teams/{teamId}/...`.
 
@@ -6,7 +6,7 @@ This build is multi-team. New customer data is stored under `teams/{teamId}/...`
 
 The included `firestore.rules` intentionally contains **both** the original GS Baseball root rules and the new `teams/{teamId}` rules. Publishing it will not force the existing Stingerz app to move immediately.
 
-The web app still points at the existing Firebase project from the source copy. For production, create a dedicated Firebase project for The Sports Hub and replace `window.GS_FIREBASE` in `index.html` plus the Firebase config in `firebase-messaging-sw.js`. This is recommended before onboarding paying teams.
+The web app still points at the existing Firebase project from the source copy. For production, create a dedicated Firebase project for The Hub and replace `window.GS_FIREBASE` in `index.html` plus the Firebase config in `firebase-messaging-sw.js`. This is recommended before onboarding paying teams.
 
 ## Test a team
 
@@ -41,11 +41,11 @@ For scheduled notifications, add a Worker text variable named `TEAM_IDS` contain
 
 `gs-baseball,test-bombers-9u`
 
-For production, `ALLOWED_ORIGIN` should be the final Sports Hub site origin.
+For production, `ALLOWED_ORIGIN` should be the final The Hub site origin.
 
 ## Before selling subscriptions
 
-1. Move Sports Hub to its own Firebase project.
+1. Move The Hub to its own Firebase project.
 2. Add a proper team directory/onboarding screen instead of relying primarily on team slugs.
 3. Add subscription status to team metadata and enforce it server-side.
 4. Add logo file upload rather than URL-only branding.

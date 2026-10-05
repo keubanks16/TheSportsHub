@@ -1,4 +1,4 @@
-# The Sports Hub
+# The Hub
 
 Multi-team/white-label development branch derived from the GS Baseball Hub. Each customer team is isolated under `teams/{teamId}` in Firestore. Select a team with `?team=team-slug`; the app remembers the selection locally.
 
@@ -8,7 +8,7 @@ Multi-team/white-label development branch derived from the GS Baseball Hub. Each
 - Team-specific local cache and watch links
 - Dynamic team name, logo URL, primary and secondary colors
 - Team switcher in the header
-- Generic Sports Hub PWA metadata
+- Generic The Hub PWA metadata
 - Backups identify the team ID
 
 > Publish the included multi-tenant `firestore.rules` before using this build with real customer data.

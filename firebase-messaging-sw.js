@@ -1,4 +1,4 @@
-// The Sports Hub service worker.
+// The Hub service worker.
 // 1. Keeps a copy of the Hub on the phone so it opens and keeps scoring with no signal.
 // 2. Shows notifications when the app is closed (Firebase Cloud Messaging).
 
@@ -93,6 +93,6 @@ self.addEventListener('fetch', (event) => {
 try {
 importScripts('https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/12.19.0/firebase-messaging-compat.js');
-firebase.initializeApp({"apiKey": "AIzaSyBfTjGdAr9nXPEp30X7c9Ot01fT5oGV7_0", "authDomain": "stingerz-scorebook.firebaseapp.com", "projectId": "stingerz-scorebook", "storageBucket": "stingerz-scorebook.firebasestorage.app", "messagingSenderId": "667344236029", "appId": "1:667344236029:web:9f1372d2e6d96321587d94"});
+firebase.initializeApp({"apiKey":"AIzaSyDth-zgyTD4F8kzCyXKgrYWX_0YvwEgGYg","authDomain":"the-sports-hub-57584.firebaseapp.com","projectId":"the-sports-hub-57584","storageBucket":"the-sports-hub-57584.firebasestorage.app","messagingSenderId":"1047135905440","appId":"1:1047135905440:web:abbf487cda014269010bc5"});
 firebase.messaging();
 } catch (e) { /* notifications unavailable in this browser right now */ }
