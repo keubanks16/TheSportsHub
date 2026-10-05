@@ -779,6 +779,7 @@ body.viewer-on { overflow: hidden; }
 
 <nav class="tabs" aria-label="Sections"><div class="tabs-in" id="tabs">
   <button data-act="tab" data-tab="games"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Games</button>
+  <button data-act="tab" data-tab="practice"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M8 14h8M8 17h5"/></svg>Practice</button>
   <button data-act="tab" data-tab="live"><svg viewBox="0 0 24 24"><path d="M12 3.5 20.5 12 12 20.5 3.5 12z"/><circle cx="12" cy="12" r="2.2"/></svg>Live<span class="dot" id="live-dot" hidden></span></button>
   <button data-act="tab" data-tab="stats"><svg viewBox="0 0 24 24"><path d="M5 20V11M10 20V5M15 20v-7M20 20V8"/></svg>Stats</button>
   <button data-act="tab" data-tab="scout"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Scout</button>
@@ -1246,7 +1247,7 @@ body.viewer-on { overflow: hidden; }
     g.opponent = g.opponent || 'Opponent';
     return g;
   }
-  const Data = { team: defaultTeam(), games: {}, opponents: {}, loaded: { team: false, games: false, opps: false } };
+  const Data = { team: defaultTeam(), games: {}, practices: {}, opponents: {}, loaded: { team: false, games: false, practices: false, opps: false } };
   function oppKey(name) { const k = String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60); return 'o-' + (k || 'opponent'); }
   function normRoster(o) { const n = Object.assign({ name: 'Opponent', players: [] }, o || {}); n.players = Array.isArray(n.players) ? n.players : []; return n; }
   const rosterFor = (name) => Data.opponents[oppKey(name)] || null;
@@ -3153,6 +3154,7 @@ body.viewer-on { overflow: hidden; }
     let h = '';
     try {
       if (UI.tab === 'games') h = renderGames();
+      else if (UI.tab === 'practice') h = renderPractices();
       else if (UI.tab === 'live') h = renderLive();
       else if (UI.tab === 'stats') h = renderStats();
       else if (UI.tab === 'scout') h = renderScout();
@@ -3194,6 +3196,14 @@ body.viewer-on { overflow: hidden; }
       <span class="gr-date"><span>${d.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase()}</span><span class="d">${d.getDate()}</span><span>${d.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}</span></span>
       <span style="min-width:0"><span class="gr-opp" style="display:block">${esc(opp)} ${g.sample ? '<span class="chip sample">Sample</span>' : ''}</span><span class="gr-meta" style="display:block">${g.practice ? '<span class="chip practice">Practice</span> ' : ''}${esc(meta)}</span></span>
       <span class="gr-res">${res}</span></${startBtn ? 'div' : 'button'}>`;
+  }
+
+  function renderPractices() {
+    const can=Access.isAdmin, list=Object.values(Data.practices||{}).sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+    let h=`<div class="row"><div class="grow"><h2 class="sec" style="margin:0">Practice Schedule</h2><div class="small muted">Dates, times, locations and team notes.</div></div>${can?'<button class="btn primary" data-act="practiceAdd">+ Add</button>':''}</div>`;
+    if(!list.length)return h+`<div class="card empty" style="margin-top:14px"><h3>No practices scheduled</h3><p>${can?'Tap Add to schedule the first practice.':'Your coach has not posted a practice yet.'}</p></div>`;
+    h+='<div style="display:grid;gap:10px;margin-top:14px">';
+    for(const p of list){const d=p.date?parseDate(p.date):null,date=d&&!isNaN(d)?d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}):(p.date||'Date TBD');h+=`<section class="card"><div class="row"><div class="grow"><h3 style="margin:0 0 5px">${esc(date)}</h3><div><b>${esc(p.time||'Time TBD')}</b>${p.endTime?' – '+esc(p.endTime):''}</div>${p.location?`<div class="muted" style="margin-top:5px">📍 ${esc(p.location)}</div>`:''}${p.notes?`<p style="margin:10px 0 0">${esc(p.notes)}</p>`:''}</div>${can?`<button class="btn sm" data-act="practiceEdit" data-id="${esc(p.id)}">Edit</button>`:''}</div></section>`}return h+'</div>';
   }
 
   function renderGames() {
@@ -3978,6 +3988,14 @@ body.viewer-on { overflow: hidden; }
     },
     confirm(sh) {
       return head(esc(sh.title)) + `<p style="margin:0">${esc(sh.text)}</p><div class="row"><button class="btn ${sh.danger ? 'danger' : 'primary'}" data-act="confirmYes">${esc(sh.yes || 'Confirm')}</button><button class="btn" data-act="close">Cancel</button></div>`;
+    },
+    practice(sh) {
+      return head(sh.id?'Edit practice':'Add practice')+`
+        <label><span class="field-lbl">Date</span>${inp('f.date',sh.f.date,'type="date"')}</label>
+        <div class="grid2"><label><span class="field-lbl">Start time</span>${inp('f.time',sh.f.time,'placeholder="6:00 PM"')}</label><label><span class="field-lbl">End time</span>${inp('f.endTime',sh.f.endTime,'placeholder="7:30 PM"')}</label></div>
+        <label><span class="field-lbl">Location</span>${inp('f.location',sh.f.location,'placeholder="Practice field"')}</label>
+        <label><span class="field-lbl">Notes</span><textarea class="input" data-bind="f.notes" rows="3" placeholder="Optional">${esc(sh.f.notes||'')}</textarea></label>
+        <div class="row"><button class="btn primary" data-act="practiceSave">Save practice</button>${sh.id?'<button class="btn danger" data-act="practiceDelete" data-id="'+esc(sh.id)+'">Delete</button>':'<button class="btn" data-act="close">Cancel</button>'}</div>`;
     },
     game(sh) {
       const opps = [...new Set(Object.values(Data.games).map((g) => g.opponent))];
@@ -6262,6 +6280,10 @@ body.viewer-on { overflow: hidden; }
       try { localStorage.setItem(TEAM_KEY, id); } catch (e) {}
       const url = new URL(location.href); url.searchParams.set('team', id); url.searchParams.delete('watch'); location.href = url.toString();
     },
+    practiceAdd() { if(!Access.isAdmin)return; openSheet({type:'practice',id:'',f:{date:new Date().toISOString().slice(0,10),time:'6:00 PM',endTime:'',location:'',notes:''}}); },
+    practiceEdit(d) { if(!Access.isAdmin)return; const p=Data.practices[d.id]; if(p)openSheet({type:'practice',id:p.id,f:{date:p.date||'',time:p.time||'',endTime:p.endTime||'',location:p.location||'',notes:p.notes||''}}); },
+    practiceSave() { const sh=UI.sheet;if(!Access.isAdmin||!sh||sh.type!=='practice')return; if(!sh.f.date){sh.err='Choose a date.';return renderSheet()} const id=sh.id||uid('p'),p={id,...sh.f,updatedAt:Date.now()};Data.practices[id]=p;Saver.put('practices/'+id,p);closeSheet();render(); },
+    practiceDelete(d) { if(!Access.isAdmin||!d.id||!confirm('Delete this practice?'))return;delete Data.practices[d.id];removePath('practices/'+d.id,'practice');closeSheet();render(); },
     teamSwitch() { return openTeamsHub(); },
     async camOpen() {
       const g = liveGame();
@@ -6496,6 +6518,11 @@ body.viewer-on { overflow: hidden; }
       Data.games = next;
       Data.loaded.games = true;
       maybeReady();
+    }, onDbError));
+    subs.push(db.collection('practices').onSnapshot((snap) => {
+      const next={}; for(const doc of snap.docs) if(doc.exists&&!Saver.deleting.has('practices/'+doc.id)) next[doc.id]=Object.assign({id:doc.id},clone(doc.data()));
+      for(const id in Data.practices) if(Saver.busy('practices/'+id)) next[id]=Data.practices[id];
+      Data.practices=next; Data.loaded.practices=true; scheduleRender();
     }, onDbError));
     subs.push(db.collection('opponents').onSnapshot((snap) => {
       const next = {};
