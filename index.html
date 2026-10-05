@@ -1396,6 +1396,7 @@ body.viewer-on { overflow: hidden; }
     Access.memberLoaded = false;
     MemberSub = FB.F.onSnapshot(teamDoc('members', user.uid), (s) => {
       Access.member = s.exists() ? s.data() : null;
+      if (Access.member) rememberCloudTeam(TEAM_ID, (Data.team && Data.team.name) || TEAM_ID, Access.member.role || 'member', Access.member.status || 'known');
       Access.memberLoaded = true;
       evaluateAccess();
     }, () => { Access.member = null; Access.memberLoaded = true; evaluateAccess(); });
@@ -1570,9 +1571,39 @@ body.viewer-on { overflow: hidden; }
     await FB.F.setDoc(teamDoc('members', u.uid), { name: name || u.displayName || '', email: email || u.email || '', note: '', role: 'admin', status: 'approved', createdAt: Date.now() });
   }
   function memberLabel(m) { return m.name || m.email || 'Unnamed account'; }
+
+  const ACCOUNT_TEAMS_KEY = 'the-hub-account-teams-v1';
+  function localAccountTeams() {
+    try { const x=JSON.parse(localStorage.getItem(ACCOUNT_TEAMS_KEY)||'{}'); return x&&typeof x==='object'?x:{}; } catch(e){ return {}; }
+  }
+  function rememberLocalTeam(id,name,role,status) {
+    id=cleanTeamId(id); if(!id)return;
+    const x=localAccountTeams(); x[id]={id,name:String(name||id),role:role||'member',status:status||'known',updatedAt:Date.now()};
+    try{localStorage.setItem(ACCOUNT_TEAMS_KEY,JSON.stringify(x))}catch(e){}
+  }
+  async function rememberCloudTeam(id,name,role,status) {
+    const u=FB.auth&&FB.auth.currentUser; if(!u||u.isAnonymous)return;
+    rememberLocalTeam(id,name,role,status);
+    try{await FB.F.setDoc(FB.F.doc(FB.fs,'users',u.uid,'teams',cleanTeamId(id)),{teamId:cleanTeamId(id),name:String(name||id),role:role||'member',status:status||'known',updatedAt:Date.now()},{merge:true})}catch(e){console.warn('My Teams sync',e)}
+  }
+  async function accountTeams() {
+    const out=localAccountTeams(),u=FB.auth&&FB.auth.currentUser;
+    if(u&&!u.isAnonymous){try{const q=await FB.F.getDocs(FB.F.collection(FB.fs,'users',u.uid,'teams'));q.forEach(d=>{out[d.id]={id:d.id,...(d.data()||{})}})}catch(e){console.warn('My Teams load',e)}}
+    return Object.values(out).sort((a,b)=>String(a.name||a.id).localeCompare(String(b.name||b.id)));
+  }
+  function closeTeamsHub(){const el=document.getElementById('teamsHub');if(el)el.remove()}
+  async function openTeamsHub(){
+    const u=FB.auth&&FB.auth.currentUser;if(!u||u.isAnonymous)return A.authOpen({mode:'signin'});
+    closeTeamsHub();const teams=await accountTeams();
+    const rows=teams.length?teams.map(t=>{const id=cleanTeamId(t.id||t.teamId),active=id===TEAM_ID,meta=[t.role,t.status&&t.status!=='approved'?t.status:''].filter(Boolean).join(' · ');return `<button data-team-open="${esc(id)}" style="width:100%;text-align:left;padding:14px;border:1px solid #29477d;background:${active?'#173567':'#0d1d3d'};color:#fff;border-radius:12px;margin:7px 0"><b>${esc(t.name||id)}</b>${active?' <span style="opacity:.7">(Current)</span>':''}<div class="small muted">${esc(meta||'Team')}</div></button>`}).join(''):'<p class="muted">No teams saved to this account yet.</p>';
+    const el=document.createElement('div');el.id='teamsHub';el.style.cssText='position:fixed;inset:0;z-index:10050;background:rgba(0,8,24,.86);display:flex;align-items:center;justify-content:center;padding:18px';
+    el.innerHTML=`<div class="card" style="width:min(560px,100%);max-height:86vh;overflow:auto;padding:20px;background:#0b1935"><div class="row"><div class="grow"><h2 style="margin:0">My Teams</h2><div class="small muted">${esc(u.email||'')}</div></div><button class="btn sm" data-teams-close>Close</button></div><div style="margin:14px 0">${rows}</div><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary" data-teams-create>+ Create New Team</button><button class="btn" data-teams-join>Join Team</button><button class="btn ghost" data-teams-signout>Sign out</button></div></div>`;
+    document.body.appendChild(el);
+    el.addEventListener('click',e=>{const b=e.target.closest('[data-team-open]');if(b){const id=cleanTeamId(b.dataset.teamOpen);if(id){try{localStorage.setItem(TEAM_KEY,id)}catch(_e){}const url=new URL(location.href);url.searchParams.set('team',id);url.searchParams.delete('watch');location.href=url.toString()}return}if(e.target.closest('[data-teams-close]')||e.target===el)return closeTeamsHub();if(e.target.closest('[data-teams-create]')){closeTeamsHub();return A.createTeam()}if(e.target.closest('[data-teams-join]')){closeTeamsHub();return A.joinTeam()}if(e.target.closest('[data-teams-signout]')){closeTeamsHub();return A.signOut()}});
+  }
   function renderGate() {
     const X = Access;
-    const tsb = document.getElementById('teamSwitchBtn'); if (tsb) tsb.style.display = (X.user && !X.user.isAnonymous && X.owner) ? '' : 'none';
+    const tsb = document.getElementById('teamSwitchBtn'); if (tsb) { tsb.style.display = (X.user && !X.user.isAnonymous) ? '' : 'none'; tsb.textContent = 'My Teams'; tsb.title = 'My Teams'; }
     const name = (X.member && X.member.name) || (X.user && (X.user.displayName || X.user.email)) || '';
     let body, actions;
     const anon = X.user && X.user.isAnonymous;
@@ -6216,6 +6247,7 @@ body.viewer-on { overflow: hidden; }
         await FB.F.setDoc(FB.F.doc(FB.fs, 'teams', id, 'members', u.uid), { name: u.displayName || '', email: u.email || '', note: '', role: 'admin', status: 'approved', createdAt: Date.now() });
         const t = defaultTeam(); t.name = teamName;
         await FB.F.setDoc(FB.F.doc(FB.fs, 'teams', id, 'team', 'main'), t);
+        await rememberCloudTeam(id, teamName, 'admin', 'approved');
         try { localStorage.setItem(TEAM_KEY, id); } catch (e) {}
         const url = new URL(location.href); url.searchParams.set('team', id); url.searchParams.delete('watch'); location.href = url.toString();
       } catch (e) {
@@ -6226,10 +6258,11 @@ body.viewer-on { overflow: hidden; }
       const v = prompt('Enter your team code', '');
       const id = cleanTeamId(v);
       if (!id) return;
+      rememberCloudTeam(id, id, 'member', 'known');
       try { localStorage.setItem(TEAM_KEY, id); } catch (e) {}
       const url = new URL(location.href); url.searchParams.set('team', id); url.searchParams.delete('watch'); location.href = url.toString();
     },
-    teamSwitch() { const v = prompt('Team ID or team code', TEAM_ID); const id = cleanTeamId(v); if (!id || id === TEAM_ID) return; try { localStorage.setItem(TEAM_KEY, id); } catch (e) {} const u = new URL(location.href); u.searchParams.set('team', id); u.searchParams.delete('watch'); location.href = u.toString(); },
+    teamSwitch() { return openTeamsHub(); },
     async camOpen() {
       const g = liveGame();
       if (!g) { toast('Start the game first, then stream it.'); return; }
