@@ -3203,7 +3203,7 @@ body.viewer-on { overflow: hidden; }
   function extraWeekKey(d) {
     d=d?new Date(d+'T12:00:00'):new Date();
     const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()),day=(x.getDay()+6)%7;
-    x.setDate(x.getDate()-day); return localISO(x);
+    x.setDate(x.getDate()-day); return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
   }
   function extraWeekLabel(key) {
     const a=parseDate(key),b=new Date(a);b.setDate(b.getDate()+6);
