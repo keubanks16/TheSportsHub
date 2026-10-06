@@ -1236,7 +1236,7 @@ body.viewer-on { overflow: hidden; }
 
   // ---------- data ----------
   const defaultTeam = () => ({ name: 'The Hub', pitchLimit: 105, innings: 7, primaryColor: '#0B2753', secondaryColor: '#6DA0D6', logoURL: '', players: [] });
-  function normTeam(t) { const n = Object.assign(defaultTeam(), t || {}); n.players = Array.isArray(n.players) ? n.players : []; return n; }
+  function normTeam(t) { const n = Object.assign(defaultTeam(), t || {}); n.players = Array.isArray(n.players) ? n.players : []; n.extraWork = n.extraWork && typeof n.extraWork === 'object' ? n.extraWork : {}; return n; }
   function normGame(g) {
     g.events = Array.isArray(g.events) ? g.events : [];
     g.lineup = Array.isArray(g.lineup) ? g.lineup : [];
@@ -3155,6 +3155,7 @@ body.viewer-on { overflow: hidden; }
     try {
       if (UI.tab === 'games') h = renderGames();
       else if (UI.tab === 'practice') h = renderPractices();
+      else if (UI.tab === 'extra') h = renderExtraWork();
       else if (UI.tab === 'live') h = renderLive();
       else if (UI.tab === 'stats') h = renderStats();
       else if (UI.tab === 'scout') h = renderScout();
@@ -3198,9 +3199,39 @@ body.viewer-on { overflow: hidden; }
       <span class="gr-res">${res}</span></${startBtn ? 'div' : 'button'}>`;
   }
 
+
+  function extraWeekKey(d) {
+    d=d?new Date(d+'T12:00:00'):new Date();
+    const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()),day=(x.getDay()+6)%7;
+    x.setDate(x.getDate()-day); return localISO(x);
+  }
+  function extraWeekLabel(key) {
+    const a=parseDate(key),b=new Date(a);b.setDate(b.getDate()+6);
+    return a.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' – '+b.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+  }
+  function extraSessions(pid,key) {
+    const w=(Data.team.extraWork||{})[key]||{}; return Array.isArray(w[pid])?w[pid]:[];
+  }
+  function renderExtraWork() {
+    const key=extraWeekKey(),roster=sortedRoster(),goal=3;
+    let h=`<div class="row"><button class="btn ghost" data-act="tab" data-tab="practice">← Practice Schedule</button></div>
+      <section class="board season"><span class="lbl">30-Minute Extra Work</span><span class="rec num">3</span><span class="facts"><span>sessions per week</span><span><b>${esc(extraWeekLabel(key))}</b></span></span></section>
+      <div class="card"><h3>Put in the extra work 💪</h3><p class="muted">Complete three 30-minute sessions away from team practice each week. Choose what you worked on and have a parent confirm it.</p></div>`;
+    if(!roster.length)return h+`<div class="card empty"><h3>No players yet</h3><p>Add players to the roster first.</p></div>`;
+    h+=`<h2 class="sec">This week</h2><div class="list">`;
+    for(const p of roster){
+      const ss=extraSessions(p.id,key),done=Math.min(goal,ss.length),mins=ss.reduce((n,x)=>n+(Number(x.minutes)||30),0);
+      h+=`<div class="game-row" style="grid-template-columns:minmax(0,1fr) auto"><span style="min-width:0"><span class="gr-opp" style="display:block">${p.num?'#'+esc(p.num)+' ':''}${esc(p.name)}</span><span class="gr-meta" style="display:block">${done}/${goal} complete${ss.length?' · '+mins+' minutes':''}</span></span><span class="gr-res">${done>=goal?'<b>✅ 3/3</b>':`<button class="btn sm primary" data-act="extraAdd" data-id="${esc(p.id)}">+ Session</button>`}</span></div>`;
+      if(ss.length)h+=`<div style="padding:0 14px 10px 72px">${ss.map((x,i)=>`<div class="muted small" style="padding:3px 0">✅ ${esc(x.date||'')} · ${esc((x.drills||[]).join(', ')||'Extra work')} · ${Number(x.minutes)||30} min${Access.isAdmin?` <button class="btn ghost sm" data-act="extraDelete" data-id="${esc(p.id)}" data-v="${i}">Remove</button>`:''}</div>`).join('')}</div>`;
+    }
+    h+='</div>';
+    if(Access.isAdmin){const complete=roster.filter(p=>extraSessions(p.id,key).length>=goal).length;h+=`<div class="card"><h3>Coach dashboard</h3><p><b>${complete}/${roster.length}</b> players have completed all 3 sessions this week.</p></div>`;}
+    return h;
+  }
+
   function renderPractices() {
     const can=Access.isAdmin, list=Object.values(Data.practices||{}).sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
-    let h=`<div class="row"><div class="grow"><h2 class="sec" style="margin:0">Practice Schedule</h2><div class="small muted">Dates, times, locations and team notes.</div></div>${can?'<button class="btn primary" data-act="practiceAdd">+ Add</button>':''}</div>`;
+    let h=`<div class="row"><div class="grow"><h2 class="sec" style="margin:0">Practice Schedule</h2><div class="small muted">Dates, times, locations and team notes.</div></div>${can?'<button class="btn primary" data-act="practiceAdd">+ Add</button>':''}</div><div class="row" style="margin-top:10px"><button class="btn grow" data-act="extraWork">⚾ 30-Minute Extra Work</button></div>`;
     if(!list.length)return h+`<div class="card empty" style="margin-top:14px"><h3>No practices scheduled</h3><p>${can?'Tap Add to schedule the first practice.':'Your coach has not posted a practice yet.'}</p></div>`;
     h+='<div style="display:grid;gap:10px;margin-top:14px">';
     for(const p of list){const d=p.date?parseDate(p.date):null,date=d&&!isNaN(d)?d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}):(p.date||'Date TBD');h+=`<section class="card"><div class="row"><div class="grow"><h3 style="margin:0 0 5px">${esc(date)}</h3><div><b>${esc(p.time||'Time TBD')}</b>${p.endTime?' – '+esc(p.endTime):''}</div>${p.location?`<div class="muted" style="margin-top:5px">📍 ${esc(p.location)}</div>`:''}${p.notes?`<p style="margin:10px 0 0">${esc(p.notes)}</p>`:''}</div>${can?`<button class="btn sm" data-act="practiceEdit" data-id="${esc(p.id)}">Edit</button>`:''}</div></section>`}return h+'</div>';
@@ -3988,6 +4019,16 @@ body.viewer-on { overflow: hidden; }
     },
     confirm(sh) {
       return head(esc(sh.title)) + `<p style="margin:0">${esc(sh.text)}</p><div class="row"><button class="btn ${sh.danger ? 'danger' : 'primary'}" data-act="confirmYes">${esc(sh.yes || 'Confirm')}</button><button class="btn" data-act="close">Cancel</button></div>`;
+    },
+    extraWork(sh) {
+      const p=playerById(sh.playerId),opts=['Tee Work','Front Toss','Ground Balls','Pop Flies','Long Toss','Pitching','Catching','Footwork','Baserunning','Conditioning'],picked=new Set(sh.drills||[]);
+      return head('30-Minute Extra Work')+`
+        <div class="card" style="margin:0 0 12px"><h3>${p?esc(p.name):'Player'}</h3><p class="muted">Select what was worked on during this session.</p></div>
+        <div class="pick-checks">${opts.map(x=>`<label><input type="checkbox" data-act="extraDrill" data-v="${esc(x)}"${picked.has(x)?' checked':''}> ${esc(x)}</label>`).join('')}</div>
+        <div class="grid2"><label><span class="field-lbl">Date</span>${inp('date',sh.date||todayISO(),'type="date"')}</label><label><span class="field-lbl">Minutes</span>${inp('minutes',sh.minutes||30,'type="number" min="30" step="5"')}</label></div>
+        <label><span class="field-lbl">Parent initials</span>${inp('parent',sh.parent||'','placeholder="Required" maxlength="20" autocomplete="off"')}</label>
+        ${sh.err?`<div class="warn-text">${esc(sh.err)}</div>`:''}
+        <button class="btn primary grow" data-act="extraSave">Confirm 30-Minute Session</button>`;
     },
     practice(sh) {
       return head(sh.id?'Edit practice':'Add practice')+`
@@ -6279,6 +6320,24 @@ body.viewer-on { overflow: hidden; }
       rememberCloudTeam(id, id, 'member', 'known');
       try { localStorage.setItem(TEAM_KEY, id); } catch (e) {}
       const url = new URL(location.href); url.searchParams.set('team', id); url.searchParams.delete('watch'); location.href = url.toString();
+    },
+    extraWork() { UI.tab='extra'; render(); },
+    extraAdd(d) { openSheet({type:'extraWork',playerId:d.id,date:todayISO(),minutes:30,parent:'',drills:[],err:''}); },
+    extraDrill(d,el) { const sh=UI.sheet;if(!sh)return;const a=new Set(sh.drills||[]),v=d.v||el.value;if(el.checked)a.add(v);else a.delete(v);sh.drills=Array.from(a); },
+    extraSave() {
+      const sh=UI.sheet;if(!sh)return;const mins=Number(sh.minutes)||0;
+      if(mins<30){sh.err='Each session must be at least 30 minutes.';return renderSheet();}
+      if(!(sh.drills||[]).length){sh.err='Select at least one thing you worked on.';return renderSheet();}
+      if(!String(sh.parent||'').trim()){sh.err='Parent initials are required to confirm the session.';return renderSheet();}
+      const key=extraWeekKey(sh.date);Data.team.extraWork=Data.team.extraWork||{};Data.team.extraWork[key]=Data.team.extraWork[key]||{};
+      const a=Data.team.extraWork[key][sh.playerId]=Array.isArray(Data.team.extraWork[key][sh.playerId])?Data.team.extraWork[key][sh.playerId]:[];
+      if(a.length>=3){sh.err='This player already completed all 3 sessions for this week.';return renderSheet();}
+      a.push({date:sh.date,minutes:mins,drills:(sh.drills||[]).slice(),parent:String(sh.parent).trim(),createdAt:Date.now()});
+      saveTeam();closeSheet();UI.tab='extra';render();toast('Extra work checked off');
+    },
+    extraDelete(d) {
+      if(!Access.isAdmin)return;const key=extraWeekKey(),a=Data.team.extraWork&&Data.team.extraWork[key]&&Data.team.extraWork[key][d.id],i=Number(d.v);
+      if(!Array.isArray(a)||!a[i])return;a.splice(i,1);saveTeam();render();toast('Session removed');
     },
     practiceAdd() { if(!Access.isAdmin)return; openSheet({type:'practice',id:'',f:{date:new Date().toISOString().slice(0,10),time:'6:00 PM',endTime:'',location:'',notes:''}}); },
     practiceEdit(d) { if(!Access.isAdmin)return; const p=Data.practices[d.id]; if(p)openSheet({type:'practice',id:p.id,f:{date:p.date||'',time:p.time||'',endTime:p.endTime||'',location:p.location||'',notes:p.notes||''}}); },
