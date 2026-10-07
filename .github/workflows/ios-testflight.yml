@@ -1,12 +1,12 @@
 # Builds The Hub's iPhone app on a GitHub Mac and uploads it to App Store Connect (TestFlight).
-# Starts when a tag named ios-build-<anything> is pushed, or from GitHub: Actions ->
+# Starts on every push to the ios-release branch, or from GitHub: Actions ->
 # "iOS: build and upload to TestFlight" -> Run workflow (once this file is on the main branch).
 # One-time setup of the repository secrets is in APP_STORE.md.
 name: "iOS: build and upload to TestFlight"
 
 on:
   push:
-    tags: ['ios-build-*']
+    branches: ['ios-release']
   workflow_dispatch:
     inputs:
       version:

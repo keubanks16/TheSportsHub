@@ -100,7 +100,7 @@ GitHub → TheSportsHub → **Settings → Secrets and variables → Actions →
 | `ASC_KEY_P8` | open that `.p8` file in a text editor (Notepad, TextEdit) and paste all of it, BEGIN and END lines included |
 | `GOOGLE_SERVICE_INFO_PLIST` | open `GoogleService-Info.plist` in a text editor and paste all of it |
 
-Then start a build: push a tag named `ios-build-1` (then `ios-build-2`, and so on), or, once this workflow is on the main branch, **Actions → "iOS: build and upload to TestFlight" → Run workflow**. It takes about 15–25 minutes. The build shows up in App Store Connect → TestFlight shortly after.
+Then start a build: push the code you want to ship to the `ios-release` branch, or, once this workflow is on the main branch, **Actions → "iOS: build and upload to TestFlight" → Run workflow**. It takes about 15–25 minutes. The build shows up in App Store Connect → TestFlight shortly after.
 
 Each run uploads a new build number automatically. Bump `version` in `package.json` (or type a version when you run the workflow) for each App Store release.
 
