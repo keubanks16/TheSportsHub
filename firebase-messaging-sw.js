@@ -2,10 +2,10 @@
 // 1. Keeps a copy of the Hub on the phone so it opens and keeps scoring with no signal.
 // 2. Shows notifications when the app is closed (Firebase Cloud Messaging).
 
-const CACHE = 'the-hub-v6-20261005';
+const CACHE = 'the-hub-v7-20261007';
 const FB = 'https://www.gstatic.com/firebasejs/12.19.0/';
-const SHELL = ['./', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/icon-maskable-512.png'];
-const FB_MODULES = ['firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js', 'firebase-messaging.js'].map((f) => FB + f);
+const SHELL = ['./', 'manifest.webmanifest', 'media/the-hub-logo.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/icon-maskable-512.png'];
+const FB_MODULES = ['firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js', 'firebase-storage.js', 'firebase-messaging.js'].map((f) => FB + f);
 const PAGE = new URL('./', self.registration.scope).href;
 
 self.addEventListener('install', (event) => {

@@ -1,17 +1,27 @@
 rules_version = '2';
+// The Hub storage rules. Team logos live at teams/{teamId}/branding/. Anyone can see a logo
+// (it shows on the sign-in screen); only that team's owner or coaches can upload one.
+// Publish in Firebase: Storage -> Rules -> paste -> Publish.
 service firebase.storage {
   match /b/{bucket}/o {
-    function teamAdmin(teamId) {
+    function teamDoc(teamId, col, id) { return /databases/(default)/documents/teams/$(teamId)/$(col)/$(id); }
+    function teamOwner(teamId) {
       return request.auth != null
-        && firestore.exists(/databases/(default)/documents/teams/$(teamId)/members/$(request.auth.uid))
-        && firestore.get(/databases/(default)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.status == 'approved'
-        && firestore.get(/databases/(default)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role in ['admin','coach'];
+        && firestore.exists(teamDoc(teamId, 'config', 'setup'))
+        && firestore.get(teamDoc(teamId, 'config', 'setup')).data.owner == request.auth.uid;
+    }
+    function teamCoach(teamId) {
+      return request.auth != null
+        && firestore.exists(teamDoc(teamId, 'members', request.auth.uid))
+        && firestore.get(teamDoc(teamId, 'members', request.auth.uid)).data.status == 'approved'
+        && firestore.get(teamDoc(teamId, 'members', request.auth.uid)).data.role == 'admin';
     }
     match /teams/{teamId}/branding/{fileName} {
       allow read: if true;
-      allow write: if teamAdmin(teamId)
-        && request.resource.size < 8 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+      allow create, update: if (teamOwner(teamId) || teamCoach(teamId))
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(png|jpeg|webp|gif)');
+      allow delete: if teamOwner(teamId) || teamCoach(teamId);
     }
   }
 }
