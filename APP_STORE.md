@@ -97,10 +97,10 @@ GitHub → TheSportsHub → **Settings → Secrets and variables → Actions →
 | `APPLE_TEAM_ID` | your Team ID |
 | `ASC_KEY_ID` | Key ID of the **App Store Connect API** key |
 | `ASC_ISSUER_ID` | its Issuer ID |
-| `ASC_KEY_P8_B64` | that `.p8` file, base64: on a Mac `base64 -i AuthKey_XXXX.p8 \| pbcopy`; on Windows PowerShell `[Convert]::ToBase64String([IO.File]::ReadAllBytes("AuthKey_XXXX.p8")) \| Set-Clipboard` |
-| `GOOGLE_SERVICE_INFO_PLIST_B64` | `GoogleService-Info.plist`, base64 the same way |
+| `ASC_KEY_P8` | open that `.p8` file in a text editor (Notepad, TextEdit) and paste all of it, BEGIN and END lines included |
+| `GOOGLE_SERVICE_INFO_PLIST` | open `GoogleService-Info.plist` in a text editor and paste all of it |
 
-Then **Actions → "iOS: build and upload to TestFlight" → Run workflow**. It takes about 15–25 minutes. The build shows up in App Store Connect → TestFlight shortly after.
+Then start a build: push a tag named `ios-build-1` (then `ios-build-2`, and so on), or, once this workflow is on the main branch, **Actions → "iOS: build and upload to TestFlight" → Run workflow**. It takes about 15–25 minutes. The build shows up in App Store Connect → TestFlight shortly after.
 
 Each run uploads a new build number automatically. Bump `version` in `package.json` (or type a version when you run the workflow) for each App Store release.
 

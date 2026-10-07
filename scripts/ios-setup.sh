@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the iPhone project in ios/ from this repo (run on a Mac, or by the GitHub Actions workflow).
-#   GOOGLE_SERVICE_INFO_PLIST_B64  base64 of the Firebase iOS app's GoogleService-Info.plist
-#                                  (or put the file at native/ios/GoogleService-Info.plist; it's git-ignored)
+#   GOOGLE_SERVICE_INFO_PLIST  the Firebase iOS app's GoogleService-Info.plist, as text or base64
+#                              (or put the file at native/ios/GoogleService-Info.plist; it's git-ignored)
 #   APPLE_TEAM_ID                  optional; your Apple Developer Team ID for signing
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -16,12 +16,13 @@ if [ ! -d ios/App ]; then
 fi
 
 # Firebase (phone notifications)
-if [ -n "${GOOGLE_SERVICE_INFO_PLIST_B64:-}" ]; then
-  echo "$GOOGLE_SERVICE_INFO_PLIST_B64" | base64 --decode > ios/App/App/GoogleService-Info.plist
+if [ -n "${GOOGLE_SERVICE_INFO_PLIST:-}" ]; then
+  if printf '%s' "$GOOGLE_SERVICE_INFO_PLIST" | grep -q '<plist'; then printf '%s\n' "$GOOGLE_SERVICE_INFO_PLIST"
+  else printf '%s' "$GOOGLE_SERVICE_INFO_PLIST" | base64 --decode; fi > ios/App/App/GoogleService-Info.plist
 elif [ -f native/ios/GoogleService-Info.plist ]; then
   cp native/ios/GoogleService-Info.plist ios/App/App/GoogleService-Info.plist
 else
-  echo "Missing GoogleService-Info.plist: set GOOGLE_SERVICE_INFO_PLIST_B64 or add native/ios/GoogleService-Info.plist" >&2
+  echo "Missing GoogleService-Info.plist: set GOOGLE_SERVICE_INFO_PLIST or add native/ios/GoogleService-Info.plist" >&2
   exit 1
 fi
 
