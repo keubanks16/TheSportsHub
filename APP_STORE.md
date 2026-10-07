@@ -107,7 +107,7 @@ Each run uploads a new build number automatically. Bump `version` in `package.js
 ## 7. Test on your iPhone (TestFlight)
 
 1. App Store Connect → TestFlight → add yourself as an internal tester; install **TestFlight** on your iPhone and accept the invite.
-2. Settings → App Store → **Sandbox Account**: sign in with a sandbox tester (create one under Users and Access → Sandbox).
+2. Purchases in TestFlight builds are free test purchases on your normal Apple ID, and subscriptions renew fast (a month lasts a few minutes, a year about an hour), so you can watch renewals and cancellations happen.
 3. In the app: sign in, open a team you own → **Team → Plan → See plans** → buy Pro. The plan badge should change within a few seconds. Try **Restore purchases**, **Manage subscription**, upgrading to Elite, and turning notifications on.
 
 ## 8. Submit for review
