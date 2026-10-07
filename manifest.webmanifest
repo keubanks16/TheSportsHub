@@ -1,13 +1,13 @@
 {
-  "name": "The Hub",
-  "short_name": "The Hub",
-  "description": "The Hub baseball and softball team platform",
+  "name": "The Sports Hub",
+  "short_name": "Sports Hub",
+  "description": "The Sports Hub baseball and softball team platform",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#E8ECF2",
-  "theme_color": "#0B2753",
+  "background_color": "#050D1A",
+  "theme_color": "#0B1B33",
   "icons": [
     {
       "src": "icons/icon-192.png",

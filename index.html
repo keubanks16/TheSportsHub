@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<style>html{background:#0B2753}:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;min-height:100vh;min-height:100dvh}img{max-width:100%}[hidden]{display:none!important}</style>
-<title>The Hub</title>
-<meta name="theme-color" content="#0B2753">
+<style>html{background:#0B1B33}:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;min-height:100vh;min-height:100dvh}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>The Sports Hub</title>
+<meta name="theme-color" content="#0B1B33">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="The Hub">
+<meta name="apple-mobile-web-app-title" content="Sports Hub">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Graduate&family=Press+Start+2P&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Saira:ital,wght@0,800;1,800&family=Press+Start+2P&display=swap">
 <style>
 /* Layout: phone-first team hub (scorebook, video, chat). Navy brand bar on top, one scrolling column (max 760px), fixed tab bar at the bottom.
    Chamfered "varsity" corners, cut like the GS letterforms, mark the scoreboard and the primary actions. */
@@ -25,14 +25,14 @@
   --ink-2: #4A5874;
   --ink-3: #75829B;
   --line: #D4DBE6;
-  --navy: #0B2753;
-  --pick: #0B2753; --pick-ink: #FFFFFF;
-  --carolina: #6DA0D6;
-  --accent: #245FA8;
+  --navy: #0B1B33;
+  --pick: #0B1B33; --pick-ink: #FFFFFF;
+  --carolina: #C8F031;
+  --accent: #0B1B33;
   --accent-ink: #FFFFFF;
-  --accent-soft: #DCE8F6;
+  --accent-soft: #EEF8CF;
   --says-ink: #8A5A00; --paid-ink: #136B40; --due-ink: #B12E23;
-  --board: #0B2753;
+  --board: #0B1B33;
   --board-2: #12336A;
   --board-ink: #FFFFFF;
   --board-dim: #7F9AC4;
@@ -45,13 +45,13 @@
   --grass-2: #3E8049;
   --dirt: #C8946A;
   --chalk: #FFFFFF;
-  --hit: #6DA0D6;
+  --hit: #C8F031;
   --heat: #FF6B3D;
   --shadow: 0 1px 2px rgba(11, 28, 61, .06), 0 6px 18px rgba(11, 28, 61, .06);
   --scrim: rgba(4, 18, 45, .45);
   --on-signal: #FFFFFF;
-  --c1: #0B2753; --c1-ink: #FFFFFF; --c2: #245FA8; --c2-ink: #FFFFFF; --c3: #6DA0D6; --c3-ink: #0B2753; --c4: #A9B6CA; --c4-ink: #0B1C3D;
-  --font-display: "Graduate", "Rockwell", "Roboto Slab", Georgia, serif;
+  --c1: #0B1B33; --c1-ink: #FFFFFF; --c2: #245FA8; --c2-ink: #FFFFFF; --c3: #C8F031; --c3-ink: #0B1B33; --c4: #A9B6CA; --c4-ink: #0B1C3D;
+  --font-display: "Saira", "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
   --font-body: "Barlow Semi Condensed", "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
   --cut: 10px;
   --radius: 10px;
@@ -59,20 +59,20 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --ground: #04122D; --surface: #0A1D40; --surface-2: #0E2550; --ink: #E7EEF9; --ink-2: #A6B7D3; --ink-3: #7487A8; --line: #1B3364;
-    --accent: #7FB0E6; --accent-ink: #04122D; --accent-soft: #15315F; --says-ink: #F2C94C; --paid-ink: #7FD3A4; --due-ink: #FF9C93;
+    --accent: #C8F031; --accent-ink: #04122D; --accent-soft: #26330A; --says-ink: #F2C94C; --paid-ink: #7FD3A4; --due-ink: #FF9C93;
     --board: #020A1C; --board-2: #0B1D42; --board-ink: #FFFFFF; --board-dim: #6F8BB8;
     --ball: #3DBE7C; --strike: #F06A5C; --warn: #E8B04A; --good: #3DBE7C; --bad: #F06A5C;
     --grass: #2F6B3B; --grass-2: #275A31; --dirt: #9E7452; --chalk: #F2F5FA; --hit: #8FBDF0; --heat: #FF7A4D;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25); --scrim: rgba(0, 4, 14, .6);
     --on-signal: #04122D;
-    --pick: #7FB0E6; --pick-ink: #04122D;
+    --pick: #C8F031; --pick-ink: #04122D;
     --c1: #2E5A9E; --c1-ink: #FFFFFF; --c2: #6DA0D6; --c2-ink: #04122D; --c3: #B9D5F2; --c3-ink: #04122D; --c4: #4B5E80; --c4-ink: #FFFFFF;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --ground: #04122D; --surface: #0A1D40; --surface-2: #0E2550; --ink: #E7EEF9; --ink-2: #A6B7D3; --ink-3: #7487A8; --line: #1B3364;
-  --accent: #7FB0E6; --accent-ink: #04122D; --accent-soft: #15315F; --says-ink: #F2C94C; --paid-ink: #7FD3A4; --due-ink: #FF9C93;
+  --accent: #C8F031; --accent-ink: #04122D; --accent-soft: #26330A; --says-ink: #F2C94C; --paid-ink: #7FD3A4; --due-ink: #FF9C93;
   --board: #020A1C; --board-2: #0B1D42; --board-ink: #FFFFFF; --board-dim: #6F8BB8;
   --ball: #3DBE7C; --strike: #F06A5C; --warn: #E8B04A; --good: #3DBE7C; --bad: #F06A5C;
   --grass: #2F6B3B; --grass-2: #275A31; --dirt: #9E7452; --chalk: #F2F5FA; --hit: #8FBDF0; --heat: #FF7A4D;
@@ -80,7 +80,7 @@
   --on-signal: #04122D;
   --c1: #2E5A9E; --c1-ink: #FFFFFF; --c2: #6DA0D6; --c2-ink: #04122D; --c3: #B9D5F2; --c3-ink: #04122D; --c4: #4B5E80; --c4-ink: #FFFFFF;
   color-scheme: dark;
-  --pick: #7FB0E6; --pick-ink: #04122D;
+  --pick: #C8F031; --pick-ink: #04122D;
 }
 
 * { box-sizing: border-box; }
@@ -162,7 +162,7 @@ button { cursor: pointer; }
 .more-row button[aria-expanded="true"] svg { transform: rotate(180deg); }
 h2.sec .cnt { color: var(--ink-3); font-weight: 600; letter-spacing: .04em; margin-left: 4px; }
 h2.sec .sec-l { display: inline-flex; align-items: center; gap: 2px; }
-.bar-title b { font-family: var(--font-display); font-weight: 400; font-size: 19px; letter-spacing: .02em; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-title b { font-family: var(--font-display); font-style: italic; font-weight: 400; font-size: 19px; letter-spacing: .02em; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar-title span { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: inherit; opacity: .72; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pill { font-size: 12px; font-weight: 600; letter-spacing: .04em; padding: 4px 10px; border-radius: 99px; background: rgba(255, 255, 255, .1); color: #CFE0F5; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
 .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #7FD3A4; }
@@ -836,8 +836,8 @@ body.viewer-on { overflow: hidden; }
 <body>
 
 <header class="bar"><div class="bar-in">
-  <img class="mark" src="media/the-hub-logo.png" alt="The Hub">
-  <button class="bar-title" id="bar-title" data-act="teamSwitch" title="Switch team"><b id="team-name">The Hub</b><span id="bar-sub">The Hub</span></button>
+  <img class="mark" src="media/the-hub-logo.png" alt="The Sports Hub">
+  <button class="bar-title" id="bar-title" data-act="teamSwitch" title="Switch team"><b id="team-name">The Sports Hub</b><span id="bar-sub">The Sports Hub</span></button>
   <button class="team-switch" id="teamSwitchBtn" data-act="teamSwitch" title="Switch between your teams" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"/></svg><span>Teams</span></button><span class="pill" id="sync" data-s="saved" hidden>Saved</span>
 </div></header>
 
@@ -867,7 +867,7 @@ window.GS_FIREBASE = {"apiKey":"AIzaSyDth-zgyTD4F8kzCyXKgrYWX_0YvwEgGYg","authDo
 // appName: your product's name. workerUrl: your Cloudflare Worker address. When it's set, every
 // team gets chat photos, notifications, roster scanning, scouting reports and live video without
 // any setup of their own (coaches are recognized by their sign-in).
-window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kollinmeubanks.workers.dev',
+window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshub.kollinmeubanks.workers.dev',
   // Paid plans. Prices here are only what the app shows; the real prices are your Stripe prices.
   // billing: false unlocks everything for every team (no plans).
   billing: true, prices: { pro: { month: 15, year: 120 }, elite: { month: 35, year: 300 } } };
@@ -1297,7 +1297,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
 <script>(function () {
   'use strict';
   const E = window.GSEngine;
-  const APP = Object.assign({ appName: 'The Hub', workerUrl: '' }, window.HUB_CONFIG || {});
+  const APP = Object.assign({ appName: 'The Sports Hub', workerUrl: '' }, window.HUB_CONFIG || {});
   const APP_NAME = String(APP.appName || 'The Hub');
   const DEFAULT_LOGO = document.querySelector('.mark').getAttribute('src');
   // The current team's logo (or the app's own logo until the team uploads one).
@@ -1318,7 +1318,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
   function todayISO(when) { const d = when || new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 
   // ---------- data ----------
-  const defaultTeam = () => ({ name: 'My Team', pitchLimit: 105, innings: 7, primaryColor: '#0B2753', secondaryColor: '#6DA0D6', baseColor: '#04122D', logoURL: '', players: [] });
+  const defaultTeam = () => ({ name: 'My Team', pitchLimit: 105, innings: 7, primaryColor: '#0B1B33', secondaryColor: '#C8F031', baseColor: '#050D1A', logoURL: '', players: [] });
   function normTeam(t) { const n = Object.assign(defaultTeam(), t || {}); n.players = Array.isArray(n.players) ? n.players : []; n.extraWork = n.extraWork && typeof n.extraWork === 'object' ? n.extraWork : {}; return n; }
   function normGame(g) {
     g.events = Array.isArray(g.events) ? g.events : [];
@@ -1364,6 +1364,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
   const HEX = /^#[0-9a-f]{6}$/i;
   // Ready-made color sets: [main, accent, background, name].
   const BRAND_PRESETS = [
+    ['#0B1B33', '#C8F031', '#050D1A', 'The Sports Hub navy and volt'],
     ['#0B2753', '#6DA0D6', '#04122D', 'Navy and Carolina blue'],
     ['#7A0019', '#FFC72C', '#14070A', 'Maroon and gold'],
     ['#C8102E', '#FFFFFF', '#101418', 'Red and white'],
@@ -1419,9 +1420,9 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
   function applyTeamBrand(t) {
     // Free teams use the app's own look; logo and colors come with Pro.
     const team = has('branding') ? (t || {}) : { name: (t || {}).name };
-    const primary = HEX.test(team.primaryColor || '') ? team.primaryColor : '#0B2753';
-    const secondary = HEX.test(team.secondaryColor || '') ? team.secondaryColor : '#6DA0D6';
-    const base = HEX.test(team.baseColor || '') ? team.baseColor : '#04122D';
+    const primary = HEX.test(team.primaryColor || '') ? team.primaryColor : '#0B1B33';
+    const secondary = HEX.test(team.secondaryColor || '') ? team.secondaryColor : '#C8F031';
+    const base = HEX.test(team.baseColor || '') ? team.baseColor : '#050D1A';
     const r = document.documentElement.style;
     // Team branding: primary controls the main team surfaces; secondary controls accents/actions.
     // Keep these roles separate so changing one color never silently substitutes for the other.
@@ -1774,7 +1775,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
   function dirSync() {
     if (!Access.isAdmin || !Data.loaded.team || !Dir.loaded || !FB.F || !TEAM_CHOSEN) return;
     const t = Data.team, d = Dir.d || {};
-    const want = { name: String(t.name || TEAM_ID).slice(0, 60), logoURL: safeLogo(t.logoURL), primaryColor: t.primaryColor || '#0B2753', secondaryColor: t.secondaryColor || '#6DA0D6', baseColor: t.baseColor || '#04122D' };
+    const want = { name: String(t.name || TEAM_ID).slice(0, 60), logoURL: safeLogo(t.logoURL), primaryColor: t.primaryColor || '#0B1B33', secondaryColor: t.secondaryColor || '#C8F031', baseColor: t.baseColor || '#050D1A' };
     if (Dir.exists && Object.keys(want).every((k) => (d[k] || '') === want[k])) return;
     if (dirSync.busy || Date.now() - (dirSync.failedAt || 0) < 60000 || (!Dir.exists && !Access.owner)) return;
     dirSync.busy = true;
@@ -4790,7 +4791,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
     },
     teamEdit(sh) {
       const f = sh.f;
-      const pv = { primary: HEX.test(f.primaryColor) ? f.primaryColor : '#0B2753', secondary: HEX.test(f.secondaryColor) ? f.secondaryColor : '#6DA0D6', base: HEX.test(f.baseColor) ? f.baseColor : '#04122D' };
+      const pv = { primary: HEX.test(f.primaryColor) ? f.primaryColor : '#0B1B33', secondary: HEX.test(f.secondaryColor) ? f.secondaryColor : '#C8F031', base: HEX.test(f.baseColor) ? f.baseColor : '#050D1A' };
       const logo = safeLogo(f.logoURL);
       return head('Team settings & branding') + `<label><span class="field-lbl">Team name</span>${inp('f.name', f.name, 'maxlength="60"')}</label>
         ${has('branding') ? `<div><span class="field-lbl">Logo</span><div class="logo-pick"><span class="lp-img" style="background:${esc(pv.primary)}"><img src="${esc(logo || DEFAULT_LOGO)}" alt=""></span><div class="stack" style="gap:6px"><div class="row" style="gap:8px"><button type="button" class="btn sm primary" data-act="uploadTeamLogo" ${sh.uploading ? 'disabled' : ''}>${sh.uploading ? 'Uploading…' : logo ? 'Change logo' : 'Upload logo'}</button>${logo ? '<button type="button" class="btn sm ghost" data-act="teamLogoClear">Remove</button>' : ''}</div><span class="small muted">PNG with a transparent background looks best. Up to 5 MB.</span></div></div></div>
@@ -6268,15 +6269,15 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
     videoClear() { Data.team.video = ''; saveTeam(); closeSheet(); render(); toast('Live video removed'); },
     videoDelay(d) { setVideoPrefs({ delay: +d.v }); delayTick = -1; render(); },
     coachVideo() { setVideoPrefs({ coachShow: !videoPrefs().coachShow }); render(); },
-    teamEdit() { const t = Data.team; openSheet({ type: 'teamEdit', f: { name: t.name, pitchLimit: t.pitchLimit, innings: t.innings, primaryColor: t.primaryColor || '#0B2753', secondaryColor: t.secondaryColor || '#6DA0D6', baseColor: t.baseColor || '#04122D', logoURL: t.logoURL || '' } }); },
+    teamEdit() { const t = Data.team; openSheet({ type: 'teamEdit', f: { name: t.name, pitchLimit: t.pitchLimit, innings: t.innings, primaryColor: t.primaryColor || '#0B1B33', secondaryColor: t.secondaryColor || '#C8F031', baseColor: t.baseColor || '#050D1A', logoURL: t.logoURL || '' } }); },
     saveTeamEdit() {
       const f = UI.sheet.f;
       const logo = String(f.logoURL || '').trim();
       if (logo && !safeLogo(logo)) { toast('The logo address must start with https://'); return; }
       Data.team.name = String(f.name || '').trim().slice(0, 60) || Data.team.name || APP_NAME;
-      Data.team.primaryColor = HEX.test(String(f.primaryColor || '')) ? String(f.primaryColor) : '#0B2753';
-      Data.team.secondaryColor = HEX.test(String(f.secondaryColor || '')) ? String(f.secondaryColor) : '#6DA0D6';
-      Data.team.baseColor = HEX.test(String(f.baseColor || '')) ? String(f.baseColor) : '#04122D';
+      Data.team.primaryColor = HEX.test(String(f.primaryColor || '')) ? String(f.primaryColor) : '#0B1B33';
+      Data.team.secondaryColor = HEX.test(String(f.secondaryColor || '')) ? String(f.secondaryColor) : '#C8F031';
+      Data.team.baseColor = HEX.test(String(f.baseColor || '')) ? String(f.baseColor) : '#050D1A';
       Data.team.logoURL = logo.slice(0, 1000);
       applyTeamBrand(Data.team);
       Data.team.pitchLimit = Math.max(0, parseInt(f.pitchLimit, 10) || 0);
