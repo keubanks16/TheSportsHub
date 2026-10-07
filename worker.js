@@ -122,6 +122,7 @@ export default {
     if (PAY_TASKS.includes(task)) return payTask(task, request, body, env, reply, allowed);
     if (BILLING_TASKS.includes(task)) return billingTask(task, request, body, env, reply);
     if (task === 'account-delete') return accountDelete(request, env, reply);
+    if (task === 'push-test') return pushTest(request, env, reply);
     // Coaches (and camera operators, for live video) are recognized by their sign-in for their team.
     // The shared ACCESS_CODE still works for setups that use it.
     const codeOk = !!env.ACCESS_CODE && sameText(request.headers.get('x-gs-code') || '', String(env.ACCESS_CODE));
@@ -682,6 +683,27 @@ async function appleNotification(request, env) {
     return ok(500, 'update failed'); // Apple retries
   }
 }
+// "Send a test notification": sends one to each of the signed-in person's phones on this team and
+// reports what Firebase answered, so a setup problem shows up as a clear error in the app.
+async function pushTest(request, env, reply) {
+  let u;
+  try { u = await hubUser(request, env); } catch (e) { return reply(e.status || 500, { error: e.error || 'upstream' }); }
+  try {
+    const toks = (await u.db.list('pushTokens')).filter((x) => x.uid === u.uid && x.token).slice(0, 5);
+    const gtok = await googleToken(u.sa);
+    const results = [];
+    for (const x of toks) {
+      const it = { token: x.token, native: !!x.native, title: 'Test notification', body: 'Notifications work on this phone.', tag: 'test', link: '', icon: '' };
+      const r = await fetch('https://fcm.googleapis.com/v1/projects/' + u.sa.project_id + '/messages:send', { method: 'POST', headers: { Authorization: 'Bearer ' + gtok, 'content-type': 'application/json' }, body: JSON.stringify({ message: fcmMessage(it) }) }).catch(() => null);
+      const txt = r && !r.ok ? await r.text().catch(() => '') : '';
+      const code = (/"errorCode"\s*:\s*"(\w+)"/.exec(txt) || /"status"\s*:\s*"(\w+)"/.exec(txt) || [])[1] || '';
+      results.push({ native: !!x.native, ok: !!(r && r.ok), status: r ? r.status : 0, code, detail: txt.slice(0, 300) });
+    }
+    return reply(200, { results });
+  } catch (e) {
+    return reply(502, { error: 'upstream' });
+  }
+}
 // Deletes the signed-in user's account (App Store rule 5.1.1): their spot on every team, their
 // notification tokens and settings, their My Teams list, then the sign-in itself. Teams they own
 // stay, so the families on them keep their games and stats.
@@ -850,15 +872,18 @@ async function notifyRun(env, self, site, teamId) {
   }
   return { sent: items.length };
 }
+// iPhone app tokens get an Apple (APNs) notification; browser tokens get a web push.
+function fcmMessage(it) {
+  return it.native
+    ? { token: it.token, notification: { title: it.title, body: it.body }, data: { link: String(it.link || '') }, apns: { headers: { 'apns-priority': '10', 'apns-collapse-id': String(it.tag || 'hub').slice(0, 64) }, payload: { aps: { sound: 'default', 'thread-id': String(it.tag || 'hub').split('-')[0] } } } }
+    : { token: it.token, webpush: { headers: { Urgency: 'high', TTL: '3600' }, notification: { title: it.title, body: it.body, icon: it.icon, tag: it.tag, renotify: true }, fcm_options: { link: it.link } } };
+}
 async function sendItems(pid, tok, items, db) {
   const gone = [];
   await Promise.all(items.map(async (it) => {
     const r = await fetch('https://fcm.googleapis.com/v1/projects/' + pid + '/messages:send', {
       method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'content-type': 'application/json' },
-      // iPhone app tokens get an Apple (APNs) notification; browser tokens get a web push.
-      body: JSON.stringify({ message: it.native
-        ? { token: it.token, notification: { title: it.title, body: it.body }, data: { link: String(it.link || '') }, apns: { headers: { 'apns-priority': '10', 'apns-collapse-id': String(it.tag || '').slice(0, 64) }, payload: { aps: { sound: 'default', 'thread-id': String(it.tag || '').split('-')[0] } } } }
-        : { token: it.token, webpush: { headers: { Urgency: 'high', TTL: '3600' }, notification: { title: it.title, body: it.body, icon: it.icon, tag: it.tag, renotify: true }, fcm_options: { link: it.link } } } })
+      body: JSON.stringify({ message: fcmMessage(it) })
     }).catch(() => null);
     if (r && (r.status === 404 || r.status === 400)) { const t = await r.text().catch(() => ''); if (/UNREGISTERED|registration-token-not-registered|not a valid FCM registration token/i.test(t)) gone.push(it.id); }
   }));

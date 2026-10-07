@@ -2919,7 +2919,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
       <p class="small muted" style="margin:0">Coach announcements always come through while notifications are on.</p>
       <div><span class="field-lbl">Game updates</span>${segB('pushScores', v.scores, [['runs', 'Runs & final'], ['all', 'Every half-inning'], ['off', 'Off']])}</div>
       <p class="small muted" style="margin:0">Each game update replaces the last one, so your lock screen works like a live scoreboard.</p>
-      <div><button class="btn sm" data-act="pushOff">Turn off on this phone</button></div>`;
+      <div class="row" style="gap:8px"><button class="btn sm" data-act="pushTest">Send a test notification</button><button class="btn sm" data-act="pushOff">Turn off on this phone</button></div>`;
     return `<h2 class="sec">Notifications</h2><section class="card stack" style="padding:14px">${body}</section>`;
   }
   async function pushRemove() {
@@ -6131,6 +6131,22 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
       Push.busy = false; render();
     },
     async pushOff() { await pushRemove(); render(); toast('Notifications are off on this phone'); },
+    async pushTest() {
+      const v = pushLocal();
+      if (!v) return;
+      toast('Sending a test…');
+      try {
+        // Make sure this phone's current token is the one saved, then ask the Worker to send to it.
+        await pushWrite(v).catch(() => {});
+        const r = await workerPost({ task: 'push-test' });
+        const res = (r.d && r.d.results) || [];
+        const mine = res.find((x) => x.native === !!v.native) || res[0];
+        if (!r.ok) toast('Couldn\u2019t reach the server (' + (r.d.error || r.status) + ').');
+        else if (!mine) toast('This phone isn\u2019t saved for notifications. Turn them off and on again.');
+        else if (mine.ok) toast(NATIVE ? 'Sent. Lock your phone: it should arrive in a few seconds.' : 'Sent. It should arrive in a few seconds.');
+        else toast('Firebase refused it: ' + (mine.code || ('HTTP ' + mine.status)) + '. Send this to your app developer.');
+      } catch (e) { toast('Couldn\u2019t send the test. Check your connection.'); }
+    },
     async pushChat(d) { const v = pushLocal(); if (!v) return; v.chat = d.v === 'on'; pushSaveLocal(v); render(); try { await pushWrite(v); } catch (e) { toast('Couldn\u2019t save that setting.'); } },
     async pushScores(d) { const v = pushLocal(); if (!v) return; v.scores = d.v; pushSaveLocal(v); render(); try { await pushWrite(v); } catch (e) { toast('Couldn\u2019t save that setting.'); } },
     msgTap(d, el, ev) {
