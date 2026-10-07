@@ -94,9 +94,45 @@ button { cursor: pointer; }
 .bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--navy); color: #FFFFFF; }
 .bar-in { max-width: 760px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 12px; }
 .mark { height: 34px; width: auto; display: block; }
-.bar-title { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.bar-title { display: flex; flex-direction: column; min-width: 0; flex: 1; background: none; border: 0; padding: 0; text-align: left; color: inherit; cursor: default; }
+.bar-title.can { cursor: pointer; }
+.mark { border-radius: 6px; object-fit: contain; max-width: 72px; }
+.team-switch { display: inline-flex; align-items: center; gap: 4px; border: 1px solid currentColor; background: rgba(128, 128, 128, .14); color: inherit; border-radius: 99px; padding: 6px 11px 6px 8px; font-size: 13px; font-weight: 700; letter-spacing: .02em; min-height: 34px; white-space: nowrap; }
+.team-switch svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.team-switch:hover { background: rgba(255, 255, 255, .18); }
+/* My Teams sheet */
+.tm-list { display: flex; flex-direction: column; gap: 8px; }
+.tm-row { display: grid; grid-template-columns: 48px 1fr auto; gap: 12px; align-items: center; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; color: var(--ink); }
+.tm-row:hover { border-color: var(--accent); }
+.tm-row.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.tm-logo { width: 48px; height: 48px; border-radius: 10px; display: grid; place-items: center; overflow: hidden; font-family: var(--font-display); font-size: 18px; }
+.tm-logo img { width: 100%; height: 100%; object-fit: contain; }
+.tm-row b { display: block; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tm-row .meta { font-size: 13px; color: var(--ink-2); }
+.tm-chip { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 99px; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; }
+.tm-chip.wait { color: var(--says-ink); }
+.code-box { display: flex; align-items: center; gap: 8px; background: var(--surface-2); border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; font-family: ui-monospace, Menlo, monospace; font-size: 15px; overflow-wrap: anywhere; }
+/* Brand editor */
+.brand-preview { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); }
+.brand-preview .bp-bar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.brand-preview .bp-bar img { height: 30px; max-width: 60px; object-fit: contain; }
+.brand-preview .bp-body { padding: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.brand-preview .bp-btn { padding: 8px 12px; font-weight: 700; font-size: 14px; border-radius: 6px; }
+.presets { display: flex; gap: 8px; flex-wrap: wrap; }
+.preset { width: 40px; height: 40px; border-radius: 10px; border: 2px solid var(--line); padding: 0; overflow: hidden; display: grid; grid-template-rows: 1fr 1fr; }
+.preset i { display: block; }
+.logo-pick { display: flex; align-items: center; gap: 12px; }
+.logo-pick .lp-img { width: 64px; height: 64px; border-radius: 12px; background: var(--navy); display: grid; place-items: center; overflow: hidden; flex: none; }
+.logo-pick .lp-img img { width: 100%; height: 100%; object-fit: contain; }
+/* Expandable lists (roster, families, coaches, opponents) */
+.more-row { display: flex; justify-content: center; border-top: 1px solid var(--line); }
+.more-row button { flex: 1; background: transparent; border: 0; padding: 12px; font-weight: 700; color: var(--accent); display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; }
+.more-row svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
+.more-row button[aria-expanded="true"] svg { transform: rotate(180deg); }
+h2.sec .cnt { color: var(--ink-3); font-weight: 600; letter-spacing: .04em; margin-left: 4px; }
+h2.sec .sec-l { display: inline-flex; align-items: center; gap: 2px; }
 .bar-title b { font-family: var(--font-display); font-weight: 400; font-size: 19px; letter-spacing: .02em; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bar-title span { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: #9EBBE2; font-weight: 600; }
+.bar-title span { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: inherit; opacity: .72; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pill { font-size: 12px; font-weight: 600; letter-spacing: .04em; padding: 4px 10px; border-radius: 99px; background: rgba(255, 255, 255, .1); color: #CFE0F5; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
 .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #7FD3A4; }
 .pill[data-s="saving"]::before { background: #F2C94C; }
@@ -770,8 +806,8 @@ body.viewer-on { overflow: hidden; }
 
 <header class="bar"><div class="bar-in">
   <img class="mark" src="media/the-hub-logo.png" alt="The Hub">
-  <div class="bar-title"><b id="team-name">The Sports</b><span>Hub</span></div>
-  <button class="pill" id="teamSwitchBtn" data-act="teamSwitch" title="Switch team" style="border:0;cursor:pointer">Switch team</button><span class="pill" id="sync" data-s="saved" hidden>Saved</span>
+  <button class="bar-title" id="bar-title" data-act="teamSwitch" title="Switch team"><b id="team-name">The Hub</b><span id="bar-sub">The Hub</span></button>
+  <button class="team-switch" id="teamSwitchBtn" data-act="teamSwitch" title="Switch between your teams" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"/></svg><span>Teams</span></button><span class="pill" id="sync" data-s="saved" hidden>Saved</span>
 </div></header>
 
 <div id="video-dock" class="video-dock" hidden></div>
@@ -792,7 +828,16 @@ body.viewer-on { overflow: hidden; }
 <div id="sheet-root"></div>
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script>window.GS_FIREBASE = {"apiKey":"AIzaSyDth-zgyTD4F8kzCyXKgrYWX_0YvwEgGYg","authDomain":"the-sports-hub-57584.firebaseapp.com","projectId":"the-sports-hub-57584","storageBucket":"the-sports-hub-57584.firebasestorage.app","messagingSenderId":"1047135905440","appId":"1:1047135905440:web:abbf487cda014269010bc5"};</script>
+<script>
+/* ===== APP SETTINGS: the only lines you need to edit to run your own copy (see SETUP.md) ===== */
+// Your Firebase web app. vapidKey = Firebase console -> Project settings -> Cloud Messaging ->
+// Web Push certificates (needed for phone notifications).
+window.GS_FIREBASE = {"apiKey":"AIzaSyDth-zgyTD4F8kzCyXKgrYWX_0YvwEgGYg","authDomain":"the-sports-hub-57584.firebaseapp.com","projectId":"the-sports-hub-57584","storageBucket":"the-sports-hub-57584.firebasestorage.app","messagingSenderId":"1047135905440","appId":"1:1047135905440:web:abbf487cda014269010bc5","vapidKey":"BGAJLdyyMwjuJUhkUPfuhBTXFUpkjGUG6LF4OJmtM9ZO35Ak77BsZ1s2PqG5gR-yzg6gDu5SGcNp0-oy1OloOX0"};
+// appName: your product's name. workerUrl: your Cloudflare Worker address. When it's set, every
+// team gets chat photos, notifications, roster scanning, scouting reports and live video without
+// any setup of their own (coaches are recognized by their sign-in).
+window.HUB_CONFIG = { appName: 'The Hub', workerUrl: '' };
+</script>
 <script>/* The Hub baseball scoring engine: replays a game's event log into game state and stats. */
 (function (root) {
   'use strict';
@@ -1218,7 +1263,11 @@ body.viewer-on { overflow: hidden; }
 <script>(function () {
   'use strict';
   const E = window.GSEngine;
-  const LOGO = document.querySelector('.mark').getAttribute('src');
+  const APP = Object.assign({ appName: 'The Hub', workerUrl: '' }, window.HUB_CONFIG || {});
+  const APP_NAME = String(APP.appName || 'The Hub');
+  const DEFAULT_LOGO = document.querySelector('.mark').getAttribute('src');
+  // The current team's logo (or the app's own logo until the team uploads one).
+  let LOGO = DEFAULT_LOGO;
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const uid = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -1235,7 +1284,7 @@ body.viewer-on { overflow: hidden; }
   function todayISO(when) { const d = when || new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 
   // ---------- data ----------
-  const defaultTeam = () => ({ name: 'The Hub', pitchLimit: 105, innings: 7, primaryColor: '#0B2753', secondaryColor: '#6DA0D6', baseColor: '#04122D', logoURL: '', players: [] });
+  const defaultTeam = () => ({ name: 'My Team', pitchLimit: 105, innings: 7, primaryColor: '#0B2753', secondaryColor: '#6DA0D6', baseColor: '#04122D', logoURL: '', players: [] });
   function normTeam(t) { const n = Object.assign(defaultTeam(), t || {}); n.players = Array.isArray(n.players) ? n.players : []; n.extraWork = n.extraWork && typeof n.extraWork === 'object' ? n.extraWork : {}; return n; }
   function normGame(g) {
     g.events = Array.isArray(g.events) ? g.events : [];
@@ -1260,16 +1309,48 @@ body.viewer-on { overflow: hidden; }
   // the selection is remembered on this device. This is the isolation boundary between customers.
   const TEAM_KEY = 'sports-hub-team-id';
   function cleanTeamId(v) { return String(v || '').toLowerCase().trim().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48); }
-  let TEAM_ID = cleanTeamId(new URLSearchParams(location.search).get('team')) || cleanTeamId(localStorage.getItem(TEAM_KEY)) || 'the-hub';
-  try { localStorage.setItem(TEAM_KEY, TEAM_ID); } catch (e) {}
+  // 'the-hub' is the placeholder used before anyone picks a team; it can never be a real team.
+  const NO_TEAM = 'the-hub';
+  const RESERVED_IDS = [NO_TEAM, 'admin', 'api', 'www', 'app', 'help', 'support', 'teams', 'new', 'join'];
+  let storedTeam = '';
+  try { storedTeam = cleanTeamId(localStorage.getItem(TEAM_KEY)); } catch (e) { /* storage blocked */ }
+  let TEAM_ID = cleanTeamId(new URLSearchParams(location.search).get('team')) || storedTeam || NO_TEAM;
+  const TEAM_CHOSEN = TEAM_ID !== NO_TEAM;
+  try { if (TEAM_CHOSEN) localStorage.setItem(TEAM_KEY, TEAM_ID); else localStorage.removeItem(TEAM_KEY); } catch (e) {}
   function teamDoc(...parts) { return FB.F.doc(FB.fs, 'teams', TEAM_ID, ...parts); }
   function teamCollection(...parts) { return FB.F.collection(FB.fs, 'teams', TEAM_ID, ...parts); }
-  function teamLink() { const u = new URL(location.href); u.searchParams.set('team', TEAM_ID); u.searchParams.delete('watch'); return u.toString(); }
+  function teamLink(id) { const u = new URL(location.origin + location.pathname); u.searchParams.set('team', id || TEAM_ID); return u.toString(); }
+  // Opens another team. A full reload keeps every team's data, listeners and offline copy separate.
+  function goTeam(id, tab) {
+    id = cleanTeamId(id); if (!id) return;
+    try { localStorage.setItem(TEAM_KEY, id); } catch (e) { /* the URL carries it */ }
+    const u = new URL(location.origin + location.pathname); u.searchParams.set('team', id);
+    location.href = u.toString() + '#' + (tab || 'games');
+  }
+  const HEX = /^#[0-9a-f]{6}$/i;
+  // Ready-made color sets: [main, accent, background, name].
+  const BRAND_PRESETS = [
+    ['#0B2753', '#6DA0D6', '#04122D', 'Navy and Carolina blue'],
+    ['#7A0019', '#FFC72C', '#14070A', 'Maroon and gold'],
+    ['#C8102E', '#FFFFFF', '#101418', 'Red and white'],
+    ['#00563F', '#F2C75C', '#06150F', 'Green and gold'],
+    ['#4B2E83', '#B7A57A', '#120B21', 'Purple and gold'],
+    ['#E35205', '#1B1B1B', '#121212', 'Orange and black'],
+    ['#111111', '#C9A227', '#0A0A0A', 'Black and gold'],
+    ['#003087', '#E4002B', '#F4F6FA', 'Blue and red, light background'],
+    ['#1F6FB2', '#1F6FB2', '#FFFFFF', 'Royal blue, white background']
+  ];
+  const safeLogo = (u) => (/^https:\/\/[^\s"'<>]+$/i.test(String(u || '')) ? String(u) : '');
+  // The team's public card (teams/{id}): name, logo and colors. Anyone can read it, so the sign-in
+  // screen already shows the team's brand before someone signs in.
+  const Dir = { loaded: false, exists: false, d: null };
+  function brandOf() { return Data.loaded.team && Data.team ? Data.team : (Dir.d || {}); }
+  function teamTitle() { const b = brandOf(); return String(b.name || (Dir.d && Dir.d.name) || '').trim() || (TEAM_CHOSEN ? TEAM_ID : APP_NAME); }
   function applyTeamBrand(t) {
     const team = t || {};
-    const primary = /^#[0-9a-f]{6}$/i.test(team.primaryColor || '') ? team.primaryColor : '#0B2753';
-    const secondary = /^#[0-9a-f]{6}$/i.test(team.secondaryColor || '') ? team.secondaryColor : '#6DA0D6';
-    const base = /^#[0-9a-f]{6}$/i.test(team.baseColor || '') ? team.baseColor : '#04122D';
+    const primary = HEX.test(team.primaryColor || '') ? team.primaryColor : '#0B2753';
+    const secondary = HEX.test(team.secondaryColor || '') ? team.secondaryColor : '#6DA0D6';
+    const base = HEX.test(team.baseColor || '') ? team.baseColor : '#04122D';
     const r = document.documentElement.style;
     // Team branding: primary controls the main team surfaces; secondary controls accents/actions.
     // Keep these roles separate so changing one color never silently substitutes for the other.
@@ -1302,9 +1383,22 @@ body.viewer-on { overflow: hidden; }
     r.setProperty('--accent-ink', inkFor(secondary));
     r.setProperty('--pick-ink', inkFor(secondary));
     r.setProperty('--c3-ink', inkFor(secondary));
+    r.setProperty('--board-2', mix(primary, inkFor(primary), .14));
+    r.setProperty('--board-ink', inkFor(primary));
+    r.setProperty('--board-dim', mix(inkFor(primary), primary, .42));
+    r.setProperty('--accent-soft', mix(secondary, mix(base, '#FFFFFF', .055), .78));
+    r.setProperty('--c2', mix(primary, secondary, .5));
+    r.setProperty('--c2-ink', inkFor(mix(primary, secondary, .5)));
+    document.documentElement.style.background = mix(base, '#000000', .18);
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', primary);
+    LOGO = safeLogo(team.logoURL) || DEFAULT_LOGO;
     const logo = document.querySelector('.mark');
-    if (logo && team.logoURL) logo.src = team.logoURL;
+    if (logo && logo.getAttribute('src') !== LOGO) logo.src = LOGO;
+    if (logo) logo.alt = String(team.name || APP_NAME);
+    // The name iPhone suggests for "Add to Home Screen".
+    document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute('content', String(team.name || APP_NAME).slice(0, 30));
+    const bar = document.querySelector('.bar');
+    if (bar) bar.style.color = inkFor(primary);
   }
 
   // ---------- Firebase: logins, roles and cloud sync (website copy) ----------
@@ -1358,8 +1452,10 @@ body.viewer-on { overflow: hidden; }
     } else if (!X.canView && DataSubs) {
       DataSubs.forEach((u) => u());
       DataSubs = null;
-      Data.team = defaultTeam(); Data.games = {}; Data.opponents = {};
+      Data.team = defaultTeam(); Data.games = {}; Data.opponents = {}; Data.practices = {};
+      Data.loaded = { team: false, games: false, practices: false, opps: false };
       UI.gameId = null; UI.liveId = null;
+      applyTeamBrand(Dir.d || {});
     }
     if ((X.isAdmin || X.isCamera) && !WorkerSub) {
       WorkerSub = FB.F.onSnapshot(teamDoc('config', 'worker'), (snap) => {
@@ -1390,6 +1486,14 @@ body.viewer-on { overflow: hidden; }
       }, () => { X.members = []; });
     } else if (!X.isAdmin && MembersSub) { MembersSub(); MembersSub = null; X.members = []; }
     bdaySync();
+    dirSync();
+    if (!Caps.sample && UI.standalone) { const c = loadAiCfg(); if (c) Caps.sample = makeWorkerAI(c); }
+    if (X.user && !X.user.isAnonymous && TEAM_CHOSEN && X.setupLoaded && X.owner && (X.isOwner || X.member)) {
+      const role = X.isOwner ? 'owner' : (X.member && X.member.role) || 'parent';
+      const status = X.isOwner ? 'approved' : (X.member && X.member.status) || 'pending';
+      const key = role + '|' + status + '|' + teamTitle();
+      if (rememberCloudTeam.last !== key) { rememberCloudTeam.last = key; rememberCloudTeam(TEAM_ID, teamTitle(), role, status); }
+    }
     scheduleRender();
     if (UI.sheet && UI.sheet.type === 'auth' && X.canView && X.user) closeSheet();
   }
@@ -1427,7 +1531,6 @@ body.viewer-on { overflow: hidden; }
     Access.memberLoaded = false;
     MemberSub = FB.F.onSnapshot(teamDoc('members', user.uid), (s) => {
       Access.member = s.exists() ? s.data() : null;
-      if (Access.member) rememberCloudTeam(TEAM_ID, (Data.team && Data.team.name) || TEAM_ID, Access.member.role || 'member', Access.member.status || 'known');
       Access.memberLoaded = true;
       evaluateAccess();
     }, () => { Access.member = null; Access.memberLoaded = true; evaluateAccess(); });
@@ -1503,7 +1606,7 @@ body.viewer-on { overflow: hidden; }
       scheduleRender();
     }, () => { Invites.loaded = true; scheduleRender(); });
   }
-  function watchLink(token) { return location.origin + location.pathname + '?watch=' + token + '#live'; }
+  function watchLink(token) { return location.origin + location.pathname + '?team=' + encodeURIComponent(TEAM_ID) + '&watch=' + token + '#live'; }
   function newToken() {
     const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
     const r = crypto.getRandomValues(new Uint8Array(32));
@@ -1545,20 +1648,29 @@ body.viewer-on { overflow: hidden; }
     const base = 'https://www.gstatic.com/firebasejs/' + FB_VERSION + '/';
     let appMod;
     try {
-      [appMod, FB.A, FB.F, FB.S] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js'), import(base + 'firebase-storage.js')]);
+      [appMod, FB.A, FB.F] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')]);
     } catch (e) {
-      $('#view').innerHTML = `<div class="card empty"><img src="${LOGO}" alt=""><h3>Can't reach The Hub</h3><p>Check your internet connection, then reload.</p></div>`;
+      $('#view').innerHTML = `<div class="card empty"><img src="${LOGO}" alt=""><h3>Can't reach ${esc(APP_NAME)}</h3><p>Check your internet connection, then reload.</p></div>`;
       return;
     }
     const app = appMod.initializeApp(cfg);
     FB.app = app; FB.cfg = cfg;
-    FB.storage = FB.S.getStorage(app);
+    // Storage is only for logo uploads, so it loads on its own and never blocks opening offline.
+    import(base + 'firebase-storage.js').then((m) => { FB.S = m; FB.storage = m.getStorage(app); }).catch(() => {});
     FB.auth = FB.A.getAuth(app);
     try { FB.fs = FB.F.initializeFirestore(app, { localCache: FB.F.persistentLocalCache({ tabManager: FB.F.persistentMultipleTabManager() }) }); }
     catch (e) { FB.fs = FB.F.getFirestore(app); }
     Backend.kind = 'fb';
     Backend.db = fsAdapter(FB.F, FB.fs);
     const rulesProblem = () => { Access.rulesError = true; };
+    if (TEAM_CHOSEN) {
+      FB.F.onSnapshot(FB.F.doc(FB.fs, 'teams', TEAM_ID), (s) => {
+        Dir.loaded = true; Dir.exists = s.exists(); Dir.d = s.exists() ? s.data() : null;
+        if (!Data.loaded.team) applyTeamBrand(Dir.d || {});
+        dirSync();
+        scheduleRender();
+      }, () => { Dir.loaded = true; scheduleRender(); });
+    } else Dir.loaded = true;
     FB.F.onSnapshot(teamDoc('config', 'setup'), (s) => {
       Access.owner = s.exists() ? s.data().owner || null : null;
       Access.setupLoaded = true; Access.rulesError = false;
@@ -1576,7 +1688,27 @@ body.viewer-on { overflow: hidden; }
       watchGuest(user);
       evaluateAccess();
       guestClaim(user);
+      MyTeams.list = null;
+      if (user && !user.isAnonymous) loadMyTeams().then(() => {
+        // Nobody picked a team on this phone yet: open the one this account used last.
+        if (!TEAM_CHOSEN && !watchToken()) {
+          const ok = (MyTeams.list || []).filter((t) => t.status === 'approved' || t.role === 'owner');
+          if (ok.length) goTeam(ok.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0].id);
+        }
+      });
     });
+  }
+  // Keeps the public team card in step with the team's settings (coaches only).
+  function dirSync() {
+    if (!Access.isAdmin || !Data.loaded.team || !Dir.loaded || !FB.F || !TEAM_CHOSEN) return;
+    const t = Data.team, d = Dir.d || {};
+    const want = { name: String(t.name || TEAM_ID).slice(0, 60), logoURL: safeLogo(t.logoURL), primaryColor: t.primaryColor || '#0B2753', secondaryColor: t.secondaryColor || '#6DA0D6', baseColor: t.baseColor || '#04122D' };
+    if (Dir.exists && Object.keys(want).every((k) => (d[k] || '') === want[k])) return;
+    if (dirSync.busy || Date.now() - (dirSync.failedAt || 0) < 60000 || (!Dir.exists && !Access.owner)) return;
+    dirSync.busy = true;
+    const ref = FB.F.doc(FB.fs, 'teams', TEAM_ID);
+    const body = Dir.exists ? Object.assign({}, want, { updatedAt: Date.now() }) : Object.assign({}, want, { owner: Access.owner, createdAt: Date.now(), updatedAt: Date.now() });
+    (Dir.exists ? FB.F.updateDoc(ref, body) : FB.F.setDoc(ref, body)).catch((e) => { dirSync.failedAt = Date.now(); console.warn('Team card', e); }).finally(() => { dirSync.busy = false; });
   }
   function authErrorText(e) {
     const c = (e && e.code) || '';
@@ -1603,46 +1735,96 @@ body.viewer-on { overflow: hidden; }
   }
   function memberLabel(m) { return m.name || m.email || 'Unnamed account'; }
 
-  const ACCOUNT_TEAMS_KEY = 'the-hub-account-teams-v1';
-  function localAccountTeams() {
-    try { const x=JSON.parse(localStorage.getItem(ACCOUNT_TEAMS_KEY)||'{}'); return x&&typeof x==='object'?x:{}; } catch(e){ return {}; }
+  // ---------- My Teams: every team this account belongs to ----------
+  // users/{uid}/teams/{teamId} is each person's own list. Their phone adds to it whenever they
+  // create, join or open a team. The live role and approval come from each team's members/{uid}.
+  const ACCOUNT_TEAMS_KEY = 'the-hub-account-teams-v2:';
+  const MyTeams = { list: null, busy: null };
+  const ROLE_NAME = { owner: 'Owner', admin: 'Coach', scorer: 'Scorekeeper', camera: 'Camera operator', parent: 'Family' };
+  function localAccountTeams(uid) {
+    try { const x = JSON.parse(localStorage.getItem(ACCOUNT_TEAMS_KEY + uid) || '{}'); return x && typeof x === 'object' ? x : {}; } catch (e) { return {}; }
   }
-  function rememberLocalTeam(id,name,role,status) {
-    id=cleanTeamId(id); if(!id)return;
-    const x=localAccountTeams(); x[id]={id,name:String(name||id),role:role||'member',status:status||'known',updatedAt:Date.now()};
-    try{localStorage.setItem(ACCOUNT_TEAMS_KEY,JSON.stringify(x))}catch(e){}
+  function saveLocalTeams(uid, x) { try { localStorage.setItem(ACCOUNT_TEAMS_KEY + uid, JSON.stringify(x)); } catch (e) { /* this phone only */ } }
+  async function rememberCloudTeam(id, name, role, status) {
+    const u = FB.auth && FB.auth.currentUser; id = cleanTeamId(id);
+    if (!u || u.isAnonymous || !id || id === NO_TEAM) return;
+    const row = { teamId: id, name: String(name || id).slice(0, 60), role: role || 'parent', status: status || 'pending', updatedAt: Date.now() };
+    const x = localAccountTeams(u.uid); x[id] = Object.assign({ id }, x[id] || {}, row); delete x[id].hidden; saveLocalTeams(u.uid, x);
+    try { await FB.F.setDoc(FB.F.doc(FB.fs, 'users', u.uid, 'teams', id), Object.assign({ hidden: false }, row), { merge: true }); } catch (e) { console.warn('My Teams sync', e); }
   }
-  async function rememberCloudTeam(id,name,role,status) {
-    const u=FB.auth&&FB.auth.currentUser; if(!u||u.isAnonymous)return;
-    rememberLocalTeam(id,name,role,status);
-    try{await FB.F.setDoc(FB.F.doc(FB.fs,'users',u.uid,'teams',cleanTeamId(id)),{teamId:cleanTeamId(id),name:String(name||id),role:role||'member',status:status||'known',updatedAt:Date.now()},{merge:true})}catch(e){console.warn('My Teams sync',e)}
+  function loadMyTeams() {
+    const u = FB.auth && FB.auth.currentUser;
+    if (!u || u.isAnonymous) { MyTeams.list = []; return Promise.resolve([]); }
+    if (MyTeams.busy) return MyTeams.busy;
+    MyTeams.busy = (async () => {
+      const out = localAccountTeams(u.uid);
+      try {
+        const q = await FB.F.getDocs(FB.F.collection(FB.fs, 'users', u.uid, 'teams'));
+        q.forEach((d) => { out[d.id] = Object.assign({}, out[d.id] || {}, d.data() || {}, { id: d.id }); });
+      } catch (e) { /* offline: this phone's copy */ }
+      const list = Object.values(out).filter((t) => t && cleanTeamId(t.id || t.teamId) && cleanTeamId(t.id || t.teamId) !== NO_TEAM && t.hidden !== true);
+      await Promise.all(list.map(async (t) => {
+        const id = t.id = cleanTeamId(t.id || t.teamId);
+        try {
+          const [dir, setup, mem] = await Promise.all([
+            FB.F.getDoc(FB.F.doc(FB.fs, 'teams', id)),
+            FB.F.getDoc(FB.F.doc(FB.fs, 'teams', id, 'config', 'setup')),
+            FB.F.getDoc(FB.F.doc(FB.fs, 'teams', id, 'members', u.uid)).catch(() => null)
+          ]);
+          if (dir.exists()) { const d = dir.data() || {}; Object.assign(t, { name: d.name || t.name, logoURL: d.logoURL || '', primaryColor: d.primaryColor || '', secondaryColor: d.secondaryColor || '' }); }
+          if (setup.exists() && setup.data().owner === u.uid) { t.role = 'owner'; t.status = 'approved'; }
+          else if (mem && mem.exists()) { const m = mem.data() || {}; t.role = m.role || 'parent'; t.status = m.status || 'pending'; }
+          else t.status = setup.exists() ? 'none' : 'missing';
+        } catch (e) { t.offline = true; }
+      }));
+      const x = {}; for (const t of list) x[t.id] = t; saveLocalTeams(u.uid, x);
+      MyTeams.list = list.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
+      MyTeams.busy = null;
+      scheduleRender();
+      if (UI.sheet && UI.sheet.type === 'teams') renderSheet();
+      return MyTeams.list;
+    })();
+    return MyTeams.busy;
   }
-  async function accountTeams() {
-    const out=localAccountTeams(),u=FB.auth&&FB.auth.currentUser;
-    if(u&&!u.isAnonymous){try{const q=await FB.F.getDocs(FB.F.collection(FB.fs,'users',u.uid,'teams'));q.forEach(d=>{out[d.id]={id:d.id,...(d.data()||{})}})}catch(e){console.warn('My Teams load',e)}}
-    return Object.values(out).sort((a,b)=>String(a.name||a.id).localeCompare(String(b.name||b.id)));
+  function teamStatusText(t) {
+    if (t.status === 'pending') return 'Waiting for a coach to approve you';
+    if (t.status === 'denied') return 'Not approved';
+    if (t.status === 'none') return 'You no longer have access';
+    if (t.status === 'missing') return 'This team no longer exists';
+    return ROLE_NAME[t.role] || 'Member';
   }
-  function closeTeamsHub(){const el=document.getElementById('teamsHub');if(el)el.remove()}
-  async function openTeamsHub(){
-    const u=FB.auth&&FB.auth.currentUser;if(!u||u.isAnonymous)return A.authOpen({mode:'signin'});
-    closeTeamsHub();const teams=await accountTeams();
-    const rows=teams.length?teams.map(t=>{const id=cleanTeamId(t.id||t.teamId),active=id===TEAM_ID,meta=[t.role,t.status&&t.status!=='approved'?t.status:''].filter(Boolean).join(' · ');return `<button data-team-open="${esc(id)}" style="width:100%;text-align:left;padding:14px;border:1px solid #29477d;background:${active?'#173567':'#0d1d3d'};color:#fff;border-radius:12px;margin:7px 0"><b>${esc(t.name||id)}</b>${active?' <span style="opacity:.7">(Current)</span>':''}<div class="small muted">${esc(meta||'Team')}</div></button>`}).join(''):'<p class="muted">No teams saved to this account yet.</p>';
-    const el=document.createElement('div');el.id='teamsHub';el.style.cssText='position:fixed;inset:0;z-index:10050;background:rgba(0,8,24,.86);display:flex;align-items:center;justify-content:center;padding:18px';
-    el.innerHTML=`<div class="card" style="width:min(560px,100%);max-height:86vh;overflow:auto;padding:20px;background:#0b1935"><div class="row"><div class="grow"><h2 style="margin:0">My Teams</h2><div class="small muted">${esc(u.email||'')}</div></div><button class="btn sm" data-teams-close>Close</button></div><div style="margin:14px 0">${rows}</div><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary" data-teams-create>+ Create New Team</button><button class="btn" data-teams-join>Join Team</button><button class="btn ghost" data-teams-signout>Sign out</button></div></div>`;
-    document.body.appendChild(el);
-    el.addEventListener('click',e=>{const b=e.target.closest('[data-team-open]');if(b){const id=cleanTeamId(b.dataset.teamOpen);if(id){try{localStorage.setItem(TEAM_KEY,id)}catch(_e){}const url=new URL(location.href);url.searchParams.set('team',id);url.searchParams.delete('watch');location.href=url.toString()}return}if(e.target.closest('[data-teams-close]')||e.target===el)return closeTeamsHub();if(e.target.closest('[data-teams-create]')){closeTeamsHub();return A.createTeam()}if(e.target.closest('[data-teams-join]')){closeTeamsHub();return A.joinTeam()}if(e.target.closest('[data-teams-signout]')){closeTeamsHub();return A.signOut()}});
+  function teamTile(t) {
+    const bg = HEX.test(t.primaryColor || '') ? t.primaryColor : 'var(--navy)';
+    const init = String(t.name || t.id || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+    const logo = safeLogo(t.logoURL);
+    return `<span class="tm-logo" style="background:${esc(bg)};color:#fff">${logo ? `<img src="${esc(logo)}" alt="">` : esc(init)}</span>`;
+  }
+  function teamRowsHTML(list, opts) {
+    const o = opts || {};
+    return list.map((t) => {
+      const cur = t.id === TEAM_ID && TEAM_CHOSEN;
+      const ok = t.status === 'approved';
+      const chip = cur ? '<span class="tm-chip">Open now</span>' : ok ? `<span class="tm-chip">${esc(ROLE_NAME[t.role] || 'Member')}</span>` : t.status === 'pending' ? '<span class="tm-chip wait">Pending</span>' : '';
+      const row = `<button class="tm-row${cur ? ' on' : ''}" data-act="teamOpen" data-id="${esc(t.id)}"${t.status === 'missing' ? ' disabled' : ''}>${teamTile(t)}<span style="min-width:0"><b>${esc(t.name || t.id)}</b><span class="meta">${esc(teamStatusText(t))}</span></span>${chip}</button>`;
+      const forget = o.manage && (t.status === 'none' || t.status === 'missing' || t.status === 'denied') ? `<div class="row" style="justify-content:flex-end;margin-top:-4px"><button class="btn ghost sm" data-act="teamForget" data-id="${esc(t.id)}">Remove from my list</button></div>` : '';
+      return row + forget;
+    }).join('');
   }
   function renderGate() {
     const X = Access;
-    const tsb = document.getElementById('teamSwitchBtn'); if (tsb) { tsb.style.display = (X.user && !X.user.isAnonymous) ? '' : 'none'; tsb.textContent = 'Switch team'; tsb.title = 'Switch between your teams'; }
     const name = (X.member && X.member.name) || (X.user && (X.user.displayName || X.user.email)) || '';
-    let body, actions;
+    const first = esc(String(name).split(/[\s@]/)[0]);
+    let body, actions, extra = '';
     const anon = X.user && X.user.isAnonymous;
+    const signedIn = X.user && !anon;
+    const mine = signedIn && MyTeams.list ? MyTeams.list.filter((t) => t.id !== TEAM_ID && t.status !== 'missing' && t.status !== 'none') : [];
+    const teamsBtn = signedIn ? '<button class="btn" data-act="teamSwitch">My teams</button>' : '';
+    const teamName = esc(teamTitle());
     if (X.claiming || (watchToken() && !X.guestErr && (!X.user || anon))) {
       body = 'Opening your invite…';
       actions = '';
     } else if (X.guestErr === 'setup') {
-      body = 'Watch links aren’t turned on for this team yet. Let the coach know. (In Firebase: Authentication, Sign-in method, turn on Anonymous.)';
+      body = 'Watch links aren’t turned on yet. Let the coach know. (In Firebase: Authentication, Sign-in method, turn on Anonymous.)';
       actions = '<button class="btn" data-act="guestRetry">Try again</button>';
     } else if (X.guestErr === 'net') {
       body = 'Couldn’t open the invite. Check your connection and try again.';
@@ -1653,28 +1835,32 @@ body.viewer-on { overflow: hidden; }
     } else if (X.rulesError && !X.owner) {
       body = 'The database isn’t ready yet. In Firebase, open Firestore Database, Rules, paste the firestore.rules file, and Publish. Then reload this page.';
       actions = '';
-    } else if (!X.owner) {
-      if (!X.user || anon) {
-        body = 'Your team. Your game. Your hub.';
+    } else if (!TEAM_CHOSEN || !X.owner) {
+      const missing = TEAM_CHOSEN && !X.owner ? `No team uses the code “${esc(TEAM_ID)}”. Check the code with your coach. ` : '';
+      if (!signedIn) {
+        body = missing + 'Your team. Your game. Your hub. Coaches create a team in a minute; families join with the team code.';
         actions = '<button class="btn primary" data-act="authOpen" data-mode="account">Create Account</button><button class="btn" data-act="authOpen" data-mode="signin">Sign In</button>';
       } else {
-        body = `Welcome${name ? ', ' + esc(name.split(' ')[0]) : ''}. Create a new baseball or softball team, or join a team with its code.`;
-        actions = '<button class="btn primary" data-act="createTeam">Create a Team</button><button class="btn" data-act="joinTeam">Join a Team</button><button class="btn ghost" data-act="signOut">Sign out</button>';
+        body = missing + `Welcome${first ? ', ' + first : ''}. ${mine.length ? 'Pick a team, create a new one, or join one with its code.' : 'Create your team, or join one with the code your coach gave you.'}`;
+        actions = '<button class="btn primary" data-act="teamCreate">Create a team</button><button class="btn" data-act="teamJoin">Join a team</button><button class="btn ghost" data-act="signOut">Sign out</button>';
+        if (MyTeams.list === null) extra = '<p class="small muted">Loading your teams…</p>';
       }
     } else if (!X.user || anon) {
-      body = 'Sign in to follow games, box scores and stats. New families can create an account, and a coach approves access.';
-      actions = '<button class="btn primary" data-act="authOpen" data-mode="signin">Sign in</button><button class="btn" data-act="authOpen" data-mode="signup">Create Family Account</button><button class="btn" data-act="createTeam">Create a Team</button>';
+      body = `Sign in to follow ${teamName}: games, box scores and stats. New families create an account and a coach approves it.`;
+      actions = '<button class="btn primary" data-act="authOpen" data-mode="signin">Sign in</button><button class="btn" data-act="authOpen" data-mode="signup">Create account</button>';
     } else if (X.member && X.member.status === 'pending') {
-      body = `Thanks${name ? ', ' + name : ''}. A coach needs to approve your account before you can see games. This page opens up as soon as they do.`;
-      actions = '<button class="btn" data-act="signOut">Sign out</button>';
+      body = `Thanks${first ? ', ' + first : ''}. A coach of ${teamName} needs to approve your account before you can see games. This page opens up as soon as they do.`;
+      actions = teamsBtn + '<button class="btn ghost" data-act="signOut">Sign out</button>';
     } else if (X.member && X.member.status === 'denied') {
-      body = 'Your access request wasn’t approved. If that’s a mistake, talk to a coach.';
-      actions = '<button class="btn" data-act="signOut">Sign out</button>';
+      body = `Your request to join ${teamName} wasn’t approved. If that’s a mistake, talk to a coach.`;
+      actions = teamsBtn + '<button class="btn ghost" data-act="signOut">Sign out</button>';
     } else {
-      body = 'This account doesn’t have access yet.';
-      actions = '<button class="btn primary" data-act="requestAccess">Request access</button><button class="btn" data-act="signOut">Sign out</button>';
+      body = `You’re signed in, but you’re not on ${teamName} yet. Ask to join and a coach will approve you.`;
+      actions = '<button class="btn primary" data-act="requestAccess">Ask to join</button>' + teamsBtn + '<button class="btn ghost" data-act="signOut">Sign out</button>';
     }
-    return `<div class="card empty gate"><div class="logo-tile"><img src="${LOGO}" alt="The Hub"></div><h3>${esc((Data.team.name && Data.team.name !== 'The Hub') ? Data.team.name : 'The Hub')}</h3><p>${esc(body)}</p><div class="row" style="justify-content:center">${actions}</div>${X.user && !anon ? `<p class="small muted">Signed in as ${esc(X.user.email || '')}</p>` : ''}</div>`;
+    if (mine.length) extra += `<div class="stack" style="text-align:left;margin-top:6px"><span class="field-lbl">Your teams</span><div class="tm-list">${teamRowsHTML(mine.slice(0, 8))}</div></div>`;
+    const title = TEAM_CHOSEN && X.owner ? teamName : esc(APP_NAME);
+    return `<div class="card empty gate"><div class="logo-tile"><img src="${esc(LOGO)}" alt=""></div><h3>${title}</h3><p>${body}</p><div class="row" style="justify-content:center">${actions}</div>${extra}${signedIn ? `<p class="small muted">Signed in as ${esc(X.user.email || '')}</p>` : ''}</div>`;
   }
   function accountHTML() {
     if (Backend.kind !== 'fb') return '';
@@ -1700,12 +1886,18 @@ body.viewer-on { overflow: hidden; }
     if (Backend.kind !== 'fb' || !Access.isAdmin) return '';
     const X = Access;
     const pending = X.members.filter((m) => m.status === 'pending').sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-    const others = X.members.filter((m) => m.status !== 'pending').sort((a, b) => (a.role === b.role ? memberLabel(a).localeCompare(memberLabel(b)) : a.role === 'admin' ? -1 : 1));
+    const others = X.members.filter((m) => m.status !== 'pending').sort((a, b) => (a.uid === X.owner ? -1 : b.uid === X.owner ? 1 : a.role === b.role ? memberLabel(a).localeCompare(memberLabel(b)) : a.role === 'admin' ? -1 : b.role === 'admin' ? 1 : memberLabel(a).localeCompare(memberLabel(b))));
     let h = `<h2 class="sec">Families &amp; coaches</h2><section class="card stack" style="padding:14px">
       <div><span class="field-lbl">Who can watch games</span>${segB('setWatch', X.publicView ? 'public' : 'approved', [['approved', 'Approved families'], ['public', 'Anyone with the link']])}</div>
       <p class="small muted" style="margin:0">${X.publicView ? 'Anyone who opens the address can follow games and stats without signing in. Only coaches can change anything.' : 'Parents create an account and wait for a coach to approve it. Only approved families see games and stats.'}</p></section>`;
     if (pending.length) h += `<h2 class="sec">Waiting for approval (${pending.length})</h2><div class="card roster">${pending.map((m) => `<div class="player" style="cursor:default"><span class="no" style="font-size:14px">NEW</span><span style="min-width:0"><span class="nm">${esc(memberLabel(m))}</span><span class="meta">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}</span></span><span class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm primary" data-act="memberSet" data-uid="${esc(m.uid)}" data-status="approved">Approve</button><button class="btn sm" data-act="memberSet" data-uid="${esc(m.uid)}" data-status="denied">Deny</button></span></div>`).join('')}</div>`;
-    if (others.length) h += `<div class="card roster">${others.map((m) => { const own = m.uid === X.owner; const chip = own ? 'Owner' : m.status === 'denied' ? 'Declined' : m.role === 'admin' ? 'Coach' : m.role === 'camera' ? 'Camera' : m.role === 'scorer' ? 'Scorer' : 'Family'; return `<button class="player" data-act="member" data-uid="${esc(m.uid)}"><span class="no" style="font-size:14px">${{ Family: 'FAM', Declined: '—', Camera: 'CAM', Scorer: 'SCR' }[chip] || 'CO'}</span><span style="min-width:0"><span class="nm">${esc(memberLabel(m))}</span><span class="meta">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}</span></span><span class="chip">${chip}</span></button>`; }).join('')}</div>`;
+    const memberRow = (m) => { const own = m.uid === X.owner; const chip = own ? 'Owner' : m.status === 'denied' ? 'Declined' : m.role === 'admin' ? 'Coach' : m.role === 'camera' ? 'Camera' : m.role === 'scorer' ? 'Scorer' : 'Family'; return `<button class="player" data-act="member" data-uid="${esc(m.uid)}"><span class="no" style="font-size:14px">${{ Family: 'FAM', Declined: '—', Camera: 'CAM', Scorer: 'SCR', Owner: 'OWN' }[chip] || 'CO'}</span><span style="min-width:0"><span class="nm">${esc(memberLabel(m))}</span><span class="meta">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}${m.role === 'parent' && Array.isArray(m.players) && m.players.length ? ' · ' + esc(m.players.map(playerName).join(', ')) : ''}</span></span><span class="chip">${chip}</span></button>`; };
+    const staff = others.filter((m) => m.status !== 'denied' && (m.uid === X.owner || ['admin', 'scorer', 'camera'].includes(m.role)));
+    const fams = others.filter((m) => !staff.includes(m));
+    h += `<h2 class="sec" id="sec-coaches"><span class="sec-l">Coaches &amp; staff<span class="cnt">${staff.length}</span></span></h2>`;
+    h += staff.length ? `<div class="card roster">${expandList('coaches', staff, memberRow)}</div>` : '<div class="card empty" style="padding:16px"><p class="small" style="margin:0">Add another coach: have them join with your team code, approve them below, then tap their name and choose Coach.</p></div>';
+    h += `<h2 class="sec" id="sec-families"><span class="sec-l">Families<span class="cnt">${fams.length}</span></span></h2>`;
+    h += fams.length ? `<div class="card roster">${expandList('families', fams, memberRow)}</div>` : '<div class="card empty" style="padding:16px"><p class="small" style="margin:0">No families yet. Share your team code or join link (top of this page) and approve them here.</p></div>';
     return h;
   }
 
@@ -1930,7 +2122,7 @@ body.viewer-on { overflow: hidden; }
   const SwingHub = {
     esc, toast, logo: () => LOGO,
     user: () => ({ uid: Access.user ? Access.user.uid : '', admin: !!Access.isAdmin, owner: !!Access.isOwner, approved: !!Access.isApproved, players: myPlayers(), name: chatName(), signedIn: !!Access.user, allowed: swingsAllowed(), live: Backend.kind === 'fb' }),
-    team: () => ({ name: Data.team.name || 'The Hub', players: sortedRoster() }),
+    team: () => ({ name: Data.team.name || APP_NAME, players: sortedRoster() }),
     opponents: () => Object.entries(Data.opponents).map(([key, r]) => ({ key, name: r.name || 'Opponent', players: r.players || [] })).sort((a, b) => String(a.name).localeCompare(String(b.name))),
     swings: () => Swings.list,
     loaded: () => Swings.loaded,
@@ -2024,7 +2216,7 @@ body.viewer-on { overflow: hidden; }
   // Muting is personal: anyone can mute anyone, anytime. It hides that person's messages for you
   // and stops notifications from them; they aren't told. Saved in prefs/{your uid} (private to you,
   // read by the Worker for notifications) and on this phone so it applies right away.
-  const CHAT_MUTE = 'gs-hub-mute:';
+  const CHAT_MUTE = 'hub-mute:' + TEAM_ID + ':';
   const MUTE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>';
   function muteCache() { try { localStorage.setItem(CHAT_MUTE + Chat.muteUid, JSON.stringify(Chat.mute)); } catch (e) { /* per-device copy only */ } }
   function muteSync() {
@@ -2191,7 +2383,7 @@ body.viewer-on { overflow: hidden; }
   // with a banner on the Games tab when there's one you haven't read. Everyone with notifications
   // on gets them (the Worker sends them), even if team chat notifications are off.
   const News = { sub: null, list: [], loaded: false, mark: null };
-  const NEWS_SEEN = 'gs-hub-news-seen:';
+  const NEWS_SEEN = 'hub-news-seen:' + TEAM_ID + ':';
   const MEGAPHONE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10v4h3l7 4.5v-13l-7 4.5z"/><path d="M17 9.5a3.5 3.5 0 0 1 0 5M6.5 14l1.2 5h2.6l-1-4.3"/></svg>';
   function newsSeen() { try { return Number(localStorage.getItem(NEWS_SEEN + (Access.user ? Access.user.uid : ''))) || 0; } catch (e) { return 0; } }
   function newsMarkSeen() {
@@ -2258,7 +2450,7 @@ body.viewer-on { overflow: hidden; }
   // Photos go to the team's Cloudflare Worker, which keeps them in private R2 storage and writes
   // the chat message. Phones get short-lived viewing links from the Worker after it checks the
   // person's sign-in, so photos are only visible to approved members.
-  function workerUrl() { return String((loadAiCfg() || {}).url || Data.team.notifyUrl || '').trim(); }
+  function workerUrl() { return String((loadAiCfg() || {}).url || Data.team.notifyUrl || APP.workerUrl || '').trim().replace(/\/+$/, ''); }
   function chatPhotoUrl(key) { const c = Chat.urls.get(key); return c && c.exp * 1000 > Date.now() ? c.url : ''; }
   async function workerPost(body) {
     const tok = await Access.user.getIdToken();
@@ -2548,9 +2740,9 @@ body.viewer-on { overflow: hidden; }
     const v = pushLocal();
     let body = '';
     if (stt === 'not_setup') body = '<p style="margin:0">Notifications aren’t set up for the team yet.</p>';
-    else if (stt === 'install') body = '<p style="margin:0">On iPhone, notifications only work from the Home Screen app. In Safari, tap <b>Share → Add to Home Screen</b>, open <b>GS Hub</b> from your Home Screen, sign in, and turn notifications on here.</p>';
+    else if (stt === 'install') body = '<p style="margin:0">On iPhone, notifications only work from the Home Screen app. In Safari, tap <b>Share → Add to Home Screen</b>, open <b>' + esc(APP_NAME) + '</b> from your Home Screen, sign in, and turn notifications on here.</p>';
     else if (stt === 'unsupported') body = '<p style="margin:0">This browser can’t show notifications. On iPhone, use the Home Screen app (iOS 16.4 or later).</p>';
-    else if (stt === 'blocked') body = '<p style="margin:0">Notifications are blocked for this app. Turn them on in your phone’s Settings → Notifications → GS Hub, then come back here.</p>';
+    else if (stt === 'blocked') body = '<p style="margin:0">Notifications are blocked for this app. Turn them on in your phone’s Settings → Notifications → ' + esc(APP_NAME) + ', then come back here.</p>';
     else if (stt === 'off') body = `<p style="margin:0">Get chat messages, game starts, runs and final scores on your lock screen, even when the app is closed.</p><div><button class="btn primary" data-act="pushOn" ${Push.busy ? 'disabled' : ''}>${Push.busy ? 'Turning on…' : 'Turn on notifications'}</button></div>`;
     else body = `<p style="margin:0">On for this phone.</p>
       <div><span class="field-lbl">Team chat</span>${segB('pushChat', v.chat ? 'on' : 'off', [['on', 'On'], ['off', 'Off']])}</div>
@@ -2571,7 +2763,10 @@ body.viewer-on { overflow: hidden; }
   // ---------- Roster scanning and scouting reports through your own Cloudflare Worker (GitHub Pages copy) ----------
   const AI_KEY = 'sports-hub-ai-' + TEAM_ID;
   function localAiCfg() { try { const c = JSON.parse(localStorage.getItem(AI_KEY) || 'null'); return c && c.url && c.code ? c : null; } catch (e) { return null; } }
-  function loadAiCfg() { return (Backend.kind === 'fb' && Access.worker) || localAiCfg(); }
+  // The app-wide Worker (HUB_CONFIG.workerUrl) serves every team; coaches and camera operators are
+  // recognized by their sign-in, so they don't need an access code.
+  function platformAiCfg() { const u = String(APP.workerUrl || '').trim().replace(/\/+$/, ''); return u && Backend.kind === 'fb' && (Access.isAdmin || Access.isCamera || Access.isScorer) ? { url: u, code: '', platform: true } : null; }
+  function loadAiCfg() { return (Backend.kind === 'fb' && Access.worker) || localAiCfg() || platformAiCfg(); }
   function saveAiCfg(c) { try { if (c) localStorage.setItem(AI_KEY, JSON.stringify(c)); else localStorage.removeItem(AI_KEY); return true; } catch (e) { return false; } }
   function normAiCfg(sh) {
     const url = String(sh.url || '').trim().replace(/\/+$/, '');
@@ -2594,7 +2789,11 @@ body.viewer-on { overflow: hidden; }
   async function workerCall(cfg, task, payload, signal) {
     let r;
     try {
-      r = await fetch(cfg.url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-gs-code': cfg.code, 'x-team-id': TEAM_ID }, body: JSON.stringify(Object.assign({ task, teamId: TEAM_ID }, payload || {})), signal });
+      const headers = { 'content-type': 'application/json', 'x-team-id': TEAM_ID };
+      if (cfg.code) headers['x-gs-code'] = cfg.code;
+      const u = FB.auth && FB.auth.currentUser;
+      if (u && !u.isAnonymous) { try { headers.authorization = 'Bearer ' + await u.getIdToken(); } catch (e) { /* the code may still work */ } }
+      r = await fetch(cfg.url, { method: 'POST', headers, body: JSON.stringify(Object.assign({ task, teamId: TEAM_ID }, payload || {})), signal });
     } catch (e) { throw { code: e && e.name === 'AbortError' ? 'cancelled' : 'network' }; }
     const d = await r.json().catch(() => null);
     if (!r.ok || !d) throw { code: (d && d.error) || (r.status === 401 ? 'bad_code' : 'upstream_error'), message: (d && d.detail) || '' };
@@ -2633,7 +2832,7 @@ body.viewer-on { overflow: hidden; }
     }
   } catch (e) { /* storage blocked: the link just won't open */ }
   const hashTab = (location.hash || '').slice(1);
-  if (['games', 'live', 'stats', 'scout', 'team', 'chat', 'news', 'photos', 'iq', 'swing'].includes(hashTab)) UI.tab = hashTab;
+  if (['games', 'practice', 'live', 'stats', 'scout', 'team', 'chat', 'news', 'photos', 'iq', 'swing'].includes(hashTab)) UI.tab = hashTab;
 
   // ---------- storage backends ----------
   const LS_KEY = 'sports-hub-v1-' + TEAM_ID;
@@ -2668,7 +2867,9 @@ body.viewer-on { overflow: hidden; }
   // once the server has that version. With no signal, writes wait inside the app until service
   // returns; if the app is closed or restarted before then, the copy is put back on next open
   // (restoreUnsynced), so no pitch is lost.
-  const UNSYNCED = 'gs-hub-unsynced';
+  // Per team, so a change made offline for one team can never be put back into another.
+  const UNSYNCED = 'hub-unsynced:' + TEAM_ID;
+  try { localStorage.removeItem('gs-hub-unsynced'); } catch (e) { /* old shared copy from before multi-team */ }
   const Unsynced = {
     on: (path) => Backend.kind === 'fb' && /^(games|opponents)\//.test(path),
     all() { try { return JSON.parse(localStorage.getItem(UNSYNCED) || '{}') || {}; } catch (e) { return {}; } },
@@ -2741,8 +2942,8 @@ body.viewer-on { overflow: hidden; }
     if (Backend.kind !== 'fb') return;
     clearTimeout(pingT);
     pingT = setTimeout(() => {
-      const url = (loadAiCfg() || {}).url || Data.team.notifyUrl;
-      if (url) fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"task":"notify-check"}' }).catch(() => {});
+      const url = workerUrl();
+      if (url) fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-team-id': TEAM_ID }, body: JSON.stringify({ task: 'notify-check', teamId: TEAM_ID }) }).catch(() => {});
     }, 2500);
   }
   async function removePath(path, what) {
@@ -3105,7 +3306,7 @@ body.viewer-on { overflow: hidden; }
     };
     const counts = {};
     for (const c of IQ_CARDS) counts[c.g] = (counts[c.g] || 0) + 1;
-    let h = `<section class="iq-hero"><img src="${LOGO}" alt=""><div><div class="iq-kicker">${esc(Data.team.name || 'The Hub')}</div><h2>Baseball Instincts</h2><p>Great players know what to do <b>before</b> the ball is hit.</p></div></section>`;
+    let h = `<section class="iq-hero"><img src="${LOGO}" alt=""><div><div class="iq-kicker">${esc(Data.team.name || APP_NAME)}</div><h2>Baseball Instincts</h2><p>Great players know what to do <b>before</b> the ball is hit.</p></div></section>`;
     h += swingCardHTML() + drillsCardHTML();
     h += `<h2 class="sec">Before every pitch</h2><section class="card iq-check">${['How many outs?', 'Where are the runners?', 'If it comes to me, where do I throw?', 'Get low and get ready!'].map((t, i) => `<div><span class="iq-num">${i + 1}</span><span>${esc(t)}</span></div>`).join('')}</section>`;
     h += `<h2 class="sec">Practice</h2><div class="iq-tiles">${Object.entries(IQ_GROUPS).map(([k, g]) => tile(k, g.name, g.sub, g.icon, counts[k] + ' plays')).join('')}${tile('all', 'All-Star challenge', '10 plays from everything. Can you get 3 stars?', '<path d="m12 3 2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>', '10 plays')}</div>`;
@@ -3141,7 +3342,12 @@ body.viewer-on { overflow: hidden; }
 
   // ---------- renders ----------
   function render() {
-    $('#team-name').textContent = Data.team.name || 'The Hub';
+    const tn = teamTitle();
+    $('#team-name').textContent = tn;
+    $('#bar-sub').textContent = tn === APP_NAME ? 'Team hub' : APP_NAME;
+    const signedIn = Backend.kind === 'fb' && Access.user && !Access.user.isAnonymous;
+    $('#teamSwitchBtn').hidden = !signedIn;
+    $('#bar-title').classList.toggle('can', !!signedIn);
     syncPill();
     if (Backend.kind === 'fb' && Access.isGuest && !['games', 'live'].includes(UI.tab)) UI.tab = 'live';
     for (const b of document.querySelectorAll('#tabs button')) {
@@ -3902,22 +4108,36 @@ body.viewer-on { overflow: hidden; }
     return h + '</div>';
   }
 
+  // ----- expandable lists (roster, coaches, families, opponents) -----
+  // Long lists show the first few names; "Show all" opens the whole list, "Show less" folds it back.
+  UI.expand = {};
+  function expandList(key, items, row, limit) {
+    const lim = limit || 5, n = items.length, open = !!UI.expand[key];
+    if (n <= lim + 1) return items.map(row).join('');
+    return (open ? items : items.slice(0, lim)).map(row).join('')
+      + `<div class="more-row"><button data-act="expandToggle" data-key="${esc(key)}" aria-expanded="${open}">${open ? 'Show less' : 'Show all ' + n}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></div>`;
+  }
+
   // ----- team -----
   function renderTeam() {
     const t = Data.team;
     if (UI.feeId && Fees.list[UI.feeId] && feeAccess()) return feeDetailHTML(Fees.list[UI.feeId]);
     UI.feeId = null;
     let h = sampleBanner() + yourFeesHTML();
-    h += `<section class="card brand-card"><div class="logo-tile"><img src="${LOGO}" alt="Team logo"></div><div class="stack" style="gap:4px;min-width:0"><h3>${esc(t.name)}</h3><span class="muted small">${t.players.length} player${t.players.length === 1 ? '' : 's'} · ${t.innings}-inning games · ${t.pitchLimit ? t.pitchLimit + '-pitch limit' : 'no pitch limit'}</span>${canManage() ? '<div><button class="btn sm" data-act="teamEdit">Edit team settings</button></div>' : ''}</div></section>`;
+    h += `<section class="card brand-card"><div class="logo-tile"><img src="${esc(LOGO)}" alt="Team logo"></div><div class="stack" style="gap:4px;min-width:0"><h3>${esc(t.name)}</h3><span class="muted small">${t.players.length} player${t.players.length === 1 ? '' : 's'} · ${t.innings}-inning games · ${t.pitchLimit ? t.pitchLimit + '-pitch limit' : 'no pitch limit'}</span>${canManage() ? '<div class="row" style="gap:8px"><button class="btn sm" data-act="teamEdit">Team settings &amp; branding</button></div>' : ''}</div></section>`;
+    if (Backend.kind === 'fb' && Access.isAdmin && TEAM_CHOSEN) h += `<section class="card stack" style="padding:14px"><div class="row"><div class="grow"><b>Team code</b><div class="small muted">Families and coaches tap Join a team and type this code, or open the join link. You approve each one.</div></div></div><div class="code-box"><span class="grow">${esc(TEAM_ID)}</span><button class="btn sm" data-act="teamCodeCopy">Copy code</button></div><div class="row"><button class="btn sm primary" data-act="teamLinkShare">Share join link</button></div></section>`;
     h += feesHTML();
-    h += `<h2 class="sec">Roster ${canManage() ? '<button class="btn ghost sm" data-act="player">+ Add player</button>' : ''}</h2>`;
-    if (!t.players.length) h += `<div class="card empty"><h3>Add your players</h3><p>Numbers, positions, and which side they hit from. Lineups and stats use this roster.</p>${canManage() ? '<button class="btn primary" data-act="player">+ Add player</button>' : ''}</div>`;
-    else h += `<div class="card roster">${sortedRoster().map((p) => `<button class="player" data-act="${canManage() ? 'player' : 'playerCard'}" data-id="${esc(p.id)}"><span class="no">${esc(p.num || '–')}</span><span style="min-width:0"><span class="nm">${esc(p.name)}</span> ${p.sample ? '<span class="chip sample">Sample</span>' : ''}<span class="meta">${esc(p.pos || 'Position not set')} · B/T ${esc(p.bats || '?')}/${esc(p.throws || '?')}${canManage() && bdayOk(Bday.dates[p.id]) ? ' · 🎂 ' + esc(bdayShort(Bday.dates[p.id])) : ''}</span></span><span class="meta">${canManage() ? 'Edit' : ''}</span></button>`).join('')}</div>`;
+    const roster = sortedRoster();
+    const playerRow = (p) => `<button class="player" data-act="${canManage() ? 'player' : 'playerCard'}" data-id="${esc(p.id)}"><span class="no">${esc(p.num || '–')}</span><span style="min-width:0"><span class="nm">${esc(p.name)}</span> ${p.sample ? '<span class="chip sample">Sample</span>' : ''}<span class="meta">${esc(p.pos || 'Position not set')} · B/T ${esc(p.bats || '?')}/${esc(p.throws || '?')}${canManage() && bdayOk(Bday.dates[p.id]) ? ' · 🎂 ' + esc(bdayShort(Bday.dates[p.id])) : ''}</span></span><span class="meta">${canManage() ? 'Edit' : ''}</span></button>`;
+    h += `<h2 class="sec" id="sec-roster"><span class="sec-l">Roster${roster.length ? `<span class="cnt">${roster.length}</span>` : ''}</span>${canManage() ? '<button class="btn ghost sm" data-act="player">+ Add player</button>' : ''}</h2>`;
+    if (!roster.length) h += `<div class="card empty"><h3>Add your players</h3><p>Numbers, positions, and which side they hit from. Lineups and stats use this roster.</p>${canManage() ? '<button class="btn primary" data-act="player">+ Add player</button>' : ''}</div>`;
+    else h += `<div class="card roster">${expandList('roster', roster, playerRow, 8)}</div>`;
     if (canManage()) {
       const rs = Object.entries(Data.opponents).sort((a, b) => a[1].name.localeCompare(b[1].name));
-      h += `<h2 class="sec">Opponent rosters <button class="btn ghost sm" data-act="roster">+ Add roster</button></h2>`;
-      if (!rs.length) h += `<div class="card empty" style="padding:20px"><p>${Caps.sample ? 'Take a photo or screenshot of another team\'s roster and The Hub reads the names and numbers into it.' : 'Save each opponent\'s roster so lineups and scouting show names, not just numbers.'}</p><button class="btn primary" data-act="roster">+ Add roster</button></div>`;
-      else h += `<div class="card roster">${rs.map(([k, r]) => `<button class="player" data-act="roster" data-key="${esc(k)}"><span class="no" style="font-size:16px">${esc((r.name || '?').slice(0, 3).toUpperCase())}</span><span style="min-width:0"><span class="nm">${esc(r.name)}</span><span class="meta">${r.players.length} player${r.players.length === 1 ? '' : 's'}${r.spray && r.spray.players && r.spray.players.length ? ' · spray chart' : ''}${r.updatedAt ? ' · updated ' + esc(new Date(r.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) : ''}</span></span><span class="meta">Edit</span></button>`).join('')}</div>`;
+      const oppRow = ([k, r]) => `<button class="player" data-act="roster" data-key="${esc(k)}"><span class="no" style="font-size:16px">${esc((r.name || '?').slice(0, 3).toUpperCase())}</span><span style="min-width:0"><span class="nm">${esc(r.name)}</span><span class="meta">${r.players.length} player${r.players.length === 1 ? '' : 's'}${r.spray && r.spray.players && r.spray.players.length ? ' · spray chart' : ''}${r.updatedAt ? ' · updated ' + esc(new Date(r.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) : ''}</span></span><span class="meta">Edit</span></button>`;
+      h += `<h2 class="sec" id="sec-opponents"><span class="sec-l">Opponent rosters${rs.length ? `<span class="cnt">${rs.length}</span>` : ''}</span><button class="btn ghost sm" data-act="roster">+ Add roster</button></h2>`;
+      if (!rs.length) h += `<div class="card empty" style="padding:20px"><p>${Caps.sample ? 'Take a photo or screenshot of another team\'s roster and the app reads the names and numbers into it.' : 'Save each opponent\'s roster so lineups and scouting show names, not just numbers.'}</p><button class="btn primary" data-act="roster">+ Add roster</button></div>`;
+      else h += `<div class="card roster">${expandList('opponents', rs, oppRow)}</div>`;
     }
     h += invitesHTML() + accountHTML() + familiesHTML();
     if (canManage()) {
@@ -3945,7 +4165,12 @@ body.viewer-on { overflow: hidden; }
 
   // ---------- sheets ----------
   function openSheet(sh) { UI.sheet = sh; renderSheet(); }
-  function closeSheet() { UI.sheet = null; $('#sheet-root').innerHTML = ''; }
+  function closeSheet() {
+    const was = UI.sheet;
+    UI.sheet = null; $('#sheet-root').innerHTML = '';
+    // Closing the branding sheet without saving puts the team's saved colors back.
+    if (was && was.type === 'teamEdit') applyTeamBrand(Data.team);
+  }
   function renderSheet() {
     const root = $('#sheet-root');
     const sh = UI.sheet;
@@ -4231,8 +4456,8 @@ body.viewer-on { overflow: hidden; }
           ? `<div><span class="field-lbl">Opponent</span><div class="sp-opp">${esc(sh.name)}</div></div>`
           : `<label><span class="field-lbl">Opponent</span>${inp('name', sh.name, 'list="sp-opps" autocomplete="off" placeholder="Team name"')}<datalist id="sp-opps">${names.map((n) => `<option value="${esc(n)}">`).join('')}</datalist></label>`;
         h += us
-          ? `<p class="small muted" style="margin:0">Use screenshots of a spray chart report that shows each hitter's name and the dots where their balls in play went. The Hub reads every hitter, matches them to your roster, and adds the balls to your players' spray charts on the Stats tab. You check everything before it's saved.</p>`
-          : `<p class="small muted" style="margin:0">Use screenshots of a spray chart report that shows each hitter's name and the dots where their balls in play went. The Hub reads every hitter, matches them to this team's roster, and adds the balls to the Scout tab. You check everything before it's saved.</p>`;
+          ? `<p class="small muted" style="margin:0">Use screenshots of a spray chart report that shows each hitter's name and the dots where their balls in play went. ${esc(APP_NAME)} reads every hitter, matches them to your roster, and adds the balls to your players' spray charts on the Stats tab. You check everything before it's saved.</p>`
+          : `<p class="small muted" style="margin:0">Use screenshots of a spray chart report that shows each hitter's name and the dots where their balls in play went. ${esc(APP_NAME)} reads every hitter, matches them to this team's roster, and adds the balls to the Scout tab. You check everything before it's saved.</p>`;
         if (sh.busy) h += `<div class="scan"><span class="spin" aria-hidden="true"></span><span class="grow">Reading every hitter's chart. This can take a minute.${sh.busy.note ? ' ' + esc(sh.busy.note) : ''}</span><button class="btn sm" data-act="sprayStop">Stop</button></div>`;
         else h += `<div><label class="btn primary scan-btn">${CAMERA}<span>Choose spray chart screenshots</span><input class="vh" type="file" accept="image/*" multiple data-spray="1"></label></div>`;
         if (sh.err) h += `<div class="warn-text">${esc(sh.err)}</div>`;
@@ -4274,7 +4499,7 @@ body.viewer-on { overflow: hidden; }
       if (sh.mode === 'signup' || sh.mode === 'setup' || sh.mode === 'account') f += `<label><span class="field-lbl">Your name</span>${inp('name', sh.name, 'autocomplete="name" placeholder="First and last name"')}</label>`;
       f += `<label><span class="field-lbl">Email</span>${inp('email', sh.email, 'type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false"')}</label>`;
       if (sh.mode !== 'reset') f += `<label><span class="field-lbl">Password</span>${inp('password', sh.password, `type="password" autocomplete="${sh.mode === 'signin' ? 'current-password' : 'new-password'}" ${sh.mode === 'signin' ? '' : 'placeholder="At least 6 characters"'}`)}</label>`;
-      if (sh.mode === 'signup') f += `<label><span class="field-lbl">Your player</span>${inp('note', sh.note, 'placeholder="e.g. Wyatt Kell #7 (helps the coach approve you)"')}</label>`;
+      if (sh.mode === 'signup') f += `<label><span class="field-lbl">Your player</span>${inp('note', sh.note, 'placeholder="e.g. Jordan Smith #7 (helps the coach approve you)"')}</label>`;
       const intro = { signin: '', signup: '<p class="small muted" style="margin:0">A coach approves new accounts before they can see games.</p>', setup: '<p class="small muted" style="margin:0">This account gets admin rights: scoring, rosters and approving families.</p>', reset: '<p class="small muted" style="margin:0">We’ll email you a link to choose a new password.</p>' }[sh.mode];
       const links = sh.mode === 'signin' ? '<div class="row"><button class="btn ghost sm" data-act="authMode" data-mode="reset">Forgot password?</button><button class="btn ghost sm" data-act="authMode" data-mode="signup">New family? Create account</button></div>'
         : sh.mode === 'reset' || sh.mode === 'signup' ? '<div class="row"><button class="btn ghost sm" data-act="authMode" data-mode="signin">Back to sign in</button></div>' : '';
@@ -4334,7 +4559,7 @@ body.viewer-on { overflow: hidden; }
         <div class="row"><button class="btn primary" data-act="videoSave">Save</button>${Data.team.video ? '<button class="btn danger" data-act="videoClear">Remove</button>' : '<button class="btn" data-act="close">Cancel</button>'}</div>`;
     },
     yt(sh) {
-      return head('YouTube uploads') + `<p class="small muted" style="margin:0">When a stream ends, the camera phone uploads the game video to the YouTube channel of the Google account that signs in. <a href="https://github.com/keubanks16/TheHub#youtube-uploads" target="_blank" rel="noopener">Setup steps</a></p>
+      return head('YouTube uploads') + `<p class="small muted" style="margin:0">When a stream ends, the camera phone uploads the game video to the YouTube channel of the Google account that signs in. Setup steps are in the app’s setup guide (YouTube uploads).</p>
         <label><span class="field-lbl">Google OAuth client ID</span>${inp('clientId', sh.clientId, 'autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="1234-abc.apps.googleusercontent.com"')}</label>
         <div><span class="field-lbl">Upload automatically when a stream ends</span>${segB('ytAuto', sh.auto ? 'on' : 'off', [['on', 'On'], ['off', 'Off']])}</div>
         <div><span class="field-lbl">Add the replay to the game page</span>${segB('ytAttach', sh.attach ? 'on' : 'off', [['on', 'On'], ['off', 'Off']])}</div>
@@ -4342,12 +4567,49 @@ body.viewer-on { overflow: hidden; }
         ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
         <div class="row"><button class="btn primary" data-act="ytSave">Save</button>${Data.team.yt ? '<button class="btn danger" data-act="ytClear">Turn off</button>' : '<button class="btn" data-act="close">Cancel</button>'}</div>`;
     },
+    teams() {
+      const u = Access.user;
+      const list = MyTeams.list;
+      let h = head('My teams');
+      if (list === null) h += '<p class="muted" style="margin:0">Loading your teams…</p>';
+      else if (!list.length) h += '<p class="muted" style="margin:0">You’re not on any teams yet. Coaches: create your team. Families: join with the code your coach gave you.</p>';
+      else h += `<div class="tm-list">${teamRowsHTML(list, { manage: true })}</div>`;
+      h += '<div class="row"><button class="btn primary" data-act="teamCreate">+ Create a team</button><button class="btn" data-act="teamJoin">Join a team</button></div>';
+      h += '<p class="small muted" style="margin:0">Coaches can run as many teams as they like, and families can follow every team their kids play on. Switch any time from the Teams button at the top.</p>';
+      if (u && !u.isAnonymous) h += `<div class="hr"></div><div class="row"><span class="grow small muted">Signed in as ${esc(u.email || '')}</span><button class="btn ghost sm" data-act="signOut">Sign out</button></div>`;
+      return h;
+    },
+    teamCreate(sh) {
+      const id = cleanTeamId(sh.code);
+      return head('Create a team') + `<p class="small muted" style="margin:0">You’ll be the team’s owner. You can add coaches, families and branding after.</p>
+        <label><span class="field-lbl">Team name</span>${inp('name', sh.name, 'maxlength="60" placeholder="e.g. Riverside Bombers 10U" data-tc="name"')}</label>
+        <label><span class="field-lbl">Team code</span>${inp('code', sh.code, 'maxlength="48" autocapitalize="off" spellcheck="false" placeholder="riverside-bombers-10u"')}</label>
+        <div class="small muted" style="margin-top:-6px">Families type this code to join. Letters, numbers and dashes.${id && id !== sh.code ? ' It will be saved as “' + esc(id) + '”.' : ''}</div>
+        <div><span class="field-lbl">Sport</span>${segB('teamSport', sh.sport, [['baseball', 'Baseball'], ['softball', 'Softball']])}</div>
+        <div><span class="field-lbl">Team colors</span><div class="presets">${BRAND_PRESETS.map((c, i) => `<button class="preset" data-act="teamCreateColors" data-v="${i}" aria-label="${esc(c[3])}" style="${sh.preset === i ? 'border-color:var(--ink)' : ''}"><i style="background:${c[0]}"></i><i style="background:${c[1]}"></i></button>`).join('')}</div><div class="small muted" style="margin-top:6px">You can pick exact colors and upload a logo later in Team settings.</div></div>
+        ${!(Access.user && Access.user.displayName) ? `<label><span class="field-lbl">Your name</span>${inp('me', sh.me, 'autocomplete="name" placeholder="Coach first and last name"')}</label>` : ''}
+        ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
+        <div class="row"><button class="btn primary" data-act="teamCreateSave" ${sh.busy ? 'disabled' : ''}>${sh.busy ? 'Creating…' : 'Create team'}</button><button class="btn" data-act="close">Cancel</button></div>`;
+    },
+    teamJoin(sh) {
+      return head('Join a team') + `<p class="small muted" style="margin:0">Type the team code your coach gave you (or paste the join link). A coach approves you, then the team shows up under My teams.</p>
+        <label><span class="field-lbl">Team code</span>${inp('code', sh.code, 'autocapitalize="off" spellcheck="false" placeholder="riverside-bombers-10u"')}</label>
+        <label><span class="field-lbl">Your player (optional)</span>${inp('note', sh.note, 'maxlength="80" placeholder="e.g. Jordan Smith #7 (helps the coach approve you)"')}</label>
+        ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
+        <div class="row"><button class="btn primary" data-act="teamJoinSave" ${sh.busy ? 'disabled' : ''}>${sh.busy ? 'Checking…' : 'Join team'}</button><button class="btn" data-act="close">Cancel</button></div>`;
+    },
     teamEdit(sh) {
-      return head('Team settings') + `<label><span class="field-lbl">Team name</span>${inp('f.name', sh.f.name)}</label>
-        <label><span class="field-lbl">Logo URL</span>${inp('f.logoURL', sh.f.logoURL, 'placeholder="https://..." inputmode="url"')}</label><button type="button" class="btn" data-act="uploadTeamLogo">Upload Logo</button><div class="hint">Choose a logo from your phone. The Hub uploads and saves it automatically.</div>
-        <div class="grid2"><label><span class="field-lbl">Primary color</span>${inp('f.primaryColor', sh.f.primaryColor, 'type="color"')}</label><label><span class="field-lbl">Secondary color</span>${inp('f.secondaryColor', sh.f.secondaryColor, 'type="color"')}</label></div>
-        <label><span class="field-lbl">Base / background color</span>${inp('f.baseColor', sh.f.baseColor || '#04122D', 'type="color"')}</label>
-        <div class="grid2"><label><span class="field-lbl">Pitch limit</span>${inp('f.pitchLimit', sh.f.pitchLimit, 'type="number" min="0" inputmode="numeric"')}</label><label><span class="field-lbl">Innings per game</span>${inp('f.innings', sh.f.innings, 'type="number" min="1" max="12" inputmode="numeric"')}</label></div>
+      const f = sh.f;
+      const pv = { primary: HEX.test(f.primaryColor) ? f.primaryColor : '#0B2753', secondary: HEX.test(f.secondaryColor) ? f.secondaryColor : '#6DA0D6', base: HEX.test(f.baseColor) ? f.baseColor : '#04122D' };
+      const logo = safeLogo(f.logoURL);
+      return head('Team settings & branding') + `<label><span class="field-lbl">Team name</span>${inp('f.name', f.name, 'maxlength="60"')}</label>
+        <div><span class="field-lbl">Logo</span><div class="logo-pick"><span class="lp-img" style="background:${esc(pv.primary)}"><img src="${esc(logo || DEFAULT_LOGO)}" alt=""></span><div class="stack" style="gap:6px"><div class="row" style="gap:8px"><button type="button" class="btn sm primary" data-act="uploadTeamLogo" ${sh.uploading ? 'disabled' : ''}>${sh.uploading ? 'Uploading…' : logo ? 'Change logo' : 'Upload logo'}</button>${logo ? '<button type="button" class="btn sm ghost" data-act="teamLogoClear">Remove</button>' : ''}</div><span class="small muted">PNG with a transparent background looks best. Up to 5 MB.</span></div></div></div>
+        <div><span class="field-lbl">Quick color sets</span><div class="presets">${BRAND_PRESETS.map((c, i) => `<button class="preset" data-act="brandPreset" data-v="${i}" aria-label="${esc(c[3])}"><i style="background:${c[0]}"></i><i style="background:${c[1]}"></i></button>`).join('')}</div></div>
+        <div class="grid2"><label><span class="field-lbl">Main color</span>${inp('f.primaryColor', pv.primary, 'type="color" data-brand="1"')}</label><label><span class="field-lbl">Accent color</span>${inp('f.secondaryColor', pv.secondary, 'type="color" data-brand="1"')}</label></div>
+        <label><span class="field-lbl">Background color</span>${inp('f.baseColor', pv.base, 'type="color" data-brand="1"')}</label>
+        <p class="small muted" style="margin:0">Main color: the top bar and scoreboard. Accent: buttons and highlights. Background: the page and cards. Changes show live; Save keeps them for everyone on the team.</p>
+        <details><summary class="small muted">Use a logo web address instead</summary><label style="margin-top:8px;display:block"><span class="field-lbl">Logo URL (https)</span>${inp('f.logoURL', f.logoURL, 'placeholder="https://..." inputmode="url" data-brand="1"')}</label></details>
+        <div class="grid2"><label><span class="field-lbl">Pitch limit</span>${inp('f.pitchLimit', f.pitchLimit, 'type="number" min="0" inputmode="numeric"')}</label><label><span class="field-lbl">Innings per game</span>${inp('f.innings', f.innings, 'type="number" min="1" max="12" inputmode="numeric"')}</label></div>
         <p class="small muted" style="margin:0">The live screen warns as your pitcher nears the limit. Set it to 0 to turn the warning off.</p>
         <div class="row"><button class="btn primary" data-act="saveTeamEdit">Save</button><button class="btn" data-act="close">Cancel</button></div>`;
     },
@@ -4780,8 +5042,11 @@ body.viewer-on { overflow: hidden; }
       case 'stream_token': return 'Cloudflare rejected the Stream API token. Check that CF_STREAM_TOKEN has Account, Stream, Edit permission.';
       case 'stream_error': return 'Cloudflare Stream couldn\u2019t start the stream. Check that Stream is turned on in your Cloudflare account.' + (e && e.message ? ' (' + e.message + ')' : '');
       case 'whip': return 'The video connection to Cloudflare failed. Check the signal and try again.';
-      case 'camera': return 'The Hub can\u2019t use the camera. In Settings, Safari, Camera and Microphone, choose Allow, then try again.';
+      case 'camera': return '' + APP_NAME + ' can\u2019t use the camera. In Settings, Safari, Camera and Microphone, choose Allow, then try again.';
       case 'rate_limited': return 'Too many requests right now, or your usage limit was reached. Try again in a bit.';
+      case 'not_allowed': case 'not_approved': return 'Only coaches can use this.';
+      case 'inactive': return 'This feature is part of a paid plan. The team owner can turn it on.';
+      case 'signed_out': return 'Sign in again, then try again.';
       case 'session_expired': return 'Your session expired. Reload the page, then retry.';
       case 'invalid_json': case 'empty_completion': case 'refused':
         return scan ? "Couldn't read a roster from that. Try a closer, straight-on shot with the names in view." : 'A report couldn\u2019t be written from this data.';
@@ -5573,7 +5838,7 @@ body.viewer-on { overflow: hidden; }
     inviteShare(d) { const v = Invites.list.find((x) => x.id === d.id); if (v) openSheet({ type: 'invite', name: v.name, token: v.id, again: true }); },
     async inviteSend() {
       const sh = UI.sheet;
-      try { await navigator.share({ title: (Data.team.name || 'The Hub') + ' games', text: `Follow ${Data.team.name || 'the team'} games live, pitch by pitch:`, url: watchLink(sh.token) }); } catch (e) { /* closed the share sheet */ }
+      try { await navigator.share({ title: (Data.team.name || APP_NAME) + ' games', text: `Follow ${Data.team.name || 'the team'} games live, pitch by pitch:`, url: watchLink(sh.token) }); } catch (e) { /* closed the share sheet */ }
     },
     async inviteCopy() {
       const sh = UI.sheet, url = watchLink(sh.token);
@@ -5689,8 +5954,9 @@ body.viewer-on { overflow: hidden; }
         toast(e && e.code === 'permission-denied' ? 'Couldn\u2019t delete. Check that the latest security rules are published.' : 'Couldn\u2019t delete that message. Check your connection and try again.');
       }
     },
-    authOpen(d) { openSheet({ type: 'auth', mode: d.mode || 'signin', name: '', email: '', password: '', note: '', after: d.after || '' }); },
-    authMode(d) { const sh = UI.sheet; sh.mode = d.mode; sh.err = ''; sh.msg = ''; renderSheet(); },
+    // "Create account" asks to join this team only when there is a team here to join.
+    authOpen(d) { openSheet({ type: 'auth', mode: authModeFor(d.mode || 'signin'), name: '', email: '', password: '', note: '', after: d.after || '' }); },
+    authMode(d) { const sh = UI.sheet; sh.mode = authModeFor(d.mode); sh.err = ''; sh.msg = ''; renderSheet(); },
     async authSubmit() {
       const sh = UI.sheet;
       if (!sh || sh.busy || !FB.auth) return;
@@ -5719,7 +5985,8 @@ body.viewer-on { overflow: hidden; }
         const after = sh.after;
         if (UI.sheet === sh) closeSheet();
         toast(sh.mode === 'setup' ? 'Admin account ready' : sh.mode === 'account' ? 'Account created' : 'Request sent to the coaches');
-        if (sh.mode === 'account' && after === 'createTeam') return A.createTeam();
+        if (sh.mode === 'account' && after === 'createTeam') return A.teamCreate();
+        if (sh.mode === 'account' && after === 'joinTeam') return A.teamJoin();
       } catch (e) {
         sh.busy = false;
         sh.err = e && e.code === 'already-claimed' ? 'This hub already has an admin. Sign in instead.' : authErrorText(e);
@@ -5807,17 +6074,21 @@ body.viewer-on { overflow: hidden; }
     teamEdit() { const t = Data.team; openSheet({ type: 'teamEdit', f: { name: t.name, pitchLimit: t.pitchLimit, innings: t.innings, primaryColor: t.primaryColor || '#0B2753', secondaryColor: t.secondaryColor || '#6DA0D6', baseColor: t.baseColor || '#04122D', logoURL: t.logoURL || '' } }); },
     saveTeamEdit() {
       const f = UI.sheet.f;
-      Data.team.name = String(f.name).trim() || 'The Hub';
-      Data.team.primaryColor = /^#[0-9a-f]{6}$/i.test(String(f.primaryColor || '')) ? String(f.primaryColor) : '#0B2753';
-      Data.team.secondaryColor = /^#[0-9a-f]{6}$/i.test(String(f.secondaryColor || '')) ? String(f.secondaryColor) : '#6DA0D6';
-      Data.team.baseColor = /^#[0-9a-f]{6}$/i.test(String(f.baseColor || '')) ? String(f.baseColor) : '#04122D';
-      Data.team.logoURL = String(f.logoURL || '').trim().slice(0, 1000);
+      const logo = String(f.logoURL || '').trim();
+      if (logo && !safeLogo(logo)) { toast('The logo address must start with https://'); return; }
+      Data.team.name = String(f.name || '').trim().slice(0, 60) || Data.team.name || APP_NAME;
+      Data.team.primaryColor = HEX.test(String(f.primaryColor || '')) ? String(f.primaryColor) : '#0B2753';
+      Data.team.secondaryColor = HEX.test(String(f.secondaryColor || '')) ? String(f.secondaryColor) : '#6DA0D6';
+      Data.team.baseColor = HEX.test(String(f.baseColor || '')) ? String(f.baseColor) : '#04122D';
+      Data.team.logoURL = logo.slice(0, 1000);
       applyTeamBrand(Data.team);
       Data.team.pitchLimit = Math.max(0, parseInt(f.pitchLimit, 10) || 0);
       Data.team.innings = Math.max(1, Math.min(12, parseInt(f.innings, 10) || 7));
       saveTeam();
-      closeSheet();
+      UI.sheet = null; $('#sheet-root').innerHTML = '';
+      dirSync();
       render();
+      toast('Team settings saved');
     },
     clearSample() {
       confirmSheet('Clear sample data?', 'This removes the sample games and sample players. Anything you added yourself stays.', 'Clear sample data', () => {
@@ -6234,7 +6505,7 @@ body.viewer-on { overflow: hidden; }
           const g = meta.gid && Data.games[meta.gid];
           let title = Data.team.name + ' ' + (g ? camGameName(g) : meta.title || 'game');
           if (meta.part > 1) title += ' (part ' + meta.part + ')';
-          const desc = g ? (g.home ? Data.team.name + ' vs ' + g.opponent : Data.team.name + ' at ' + g.opponent) + (g.location ? ', ' + g.location : '') + ', ' + longDate(g.date) + '. Recorded with The Hub.' : 'Recorded with The Hub.';
+          const desc = g ? (g.home ? Data.team.name + ' vs ' + g.opponent : Data.team.name + ' at ' + g.opponent) + (g.location ? ', ' + g.location : '') + ', ' + longDate(g.date) + '. Recorded with ' + APP_NAME + '.' : 'Recorded with ' + APP_NAME + '.';
           const r = await ytXhr('POST', 'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status',
             Object.assign({ 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Length': String(total), 'X-Upload-Content-Type': type }, auth()),
             JSON.stringify({ snippet: { title: title.slice(0, 100), description: desc.slice(0, 4900), categoryId: '17' }, status: { privacyStatus: 'unlisted' } }));
@@ -6295,12 +6566,18 @@ body.viewer-on { overflow: hidden; }
     }
   }
 
+  function authModeFor(m) { return (m === 'signup' || m === 'setup') && !(TEAM_CHOSEN && Access.owner) ? 'account' : m === 'setup' ? 'signup' : m; }
+  function suggestCode(name, sfx) {
+    const base = cleanTeamId(name).slice(0, 40);
+    return base ? base + '-' + (sfx || Math.random().toString(36).slice(2, 5)) : '';
+  }
   async function uploadTeamLogoFile(file) {
     if (!file) return null;
     const u = FB.auth && FB.auth.currentUser;
     if (!u || u.isAnonymous) throw new Error('Sign in first.');
-    if (!/^image\//i.test(file.type || '')) throw new Error('Choose an image file.');
-    if (file.size > 8 * 1024 * 1024) throw new Error('Logo must be under 8 MB.');
+    if (!/^image\/(png|jpeg|webp|gif)$/i.test(file.type || '')) throw new Error('Choose a PNG, JPG or WebP image.');
+    if (file.size > 5 * 1024 * 1024) throw new Error('The logo must be under 5 MB.');
+    if (!FB.S || !FB.storage) throw new Error('Logo uploads need a connection. Try again in a moment.');
     const ext=((file.name||'').split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
     const r=FB.S.ref(FB.storage,`teams/${TEAM_ID}/branding/logo-${Date.now()}.${ext}`);
     await FB.S.uploadBytes(r,file,{contentType:file.type||'image/jpeg'});
@@ -6316,44 +6593,135 @@ body.viewer-on { overflow: hidden; }
 
   Object.assign(A, {
     async uploadTeamLogo() {
+      const sh = UI.sheet;
+      if (!Access.isAdmin) return;
       try {
-        const file=await chooseTeamLogo(); if(!file)return;
-        toast('Uploading logo…');
-        const url=await uploadTeamLogoFile(file);
-        const t={...(Data.team||defaultTeam()),logo:url,logoUrl:url};
-        await FB.F.setDoc(teamDoc('team','main'),t,{merge:true});
-        Data.team=t; applyBrand(); render(); toast('Team logo updated');
-      } catch(e){console.error(e);toast(e&&e.message?e.message:'Logo upload failed');}
-    },
-    async createTeam() {
-      const u = FB.auth && FB.auth.currentUser;
-      if (!u || u.isAnonymous) return A.authOpen({ mode: 'account', after: 'createTeam' });
-      const teamName = String(prompt('Team name', '') || '').trim();
-      if (!teamName) return;
-      const suggested = cleanTeamId(teamName);
-      const entered = String(prompt('Choose a team code', suggested) || '').trim();
-      const id = cleanTeamId(entered);
-      if (!id) return toast('Enter a team code.');
-      try {
-        // Create the new team atomically enough for onboarding: owner, approved owner member, and team profile.
-        await FB.F.setDoc(FB.F.doc(FB.fs, 'teams', id, 'config', 'setup'), { owner: u.uid, createdAt: Date.now() });
-        await FB.F.setDoc(FB.F.doc(FB.fs, 'teams', id, 'members', u.uid), { name: u.displayName || '', email: u.email || '', note: '', role: 'admin', status: 'approved', createdAt: Date.now() });
-        const t = defaultTeam(); t.name = teamName;
-        await FB.F.setDoc(FB.F.doc(FB.fs, 'teams', id, 'team', 'main'), t);
-        await rememberCloudTeam(id, teamName, 'admin', 'approved');
-        try { localStorage.setItem(TEAM_KEY, id); } catch (e) {}
-        const url = new URL(location.href); url.searchParams.set('team', id); url.searchParams.delete('watch'); location.href = url.toString();
+        const file = await chooseTeamLogo(); if (!file) return;
+        if (sh) { sh.uploading = true; renderSheet(); }
+        const url = await uploadTeamLogoFile(file);
+        if (UI.sheet && UI.sheet.type === 'teamEdit') { UI.sheet.f.logoURL = url; UI.sheet.uploading = false; applyTeamBrand(Object.assign({}, Data.team, UI.sheet.f)); renderSheet(); }
+        // Save the logo right away so it isn't lost if the sheet is closed.
+        Data.team.logoURL = url; saveTeam(); dirSync();
+        if (!UI.sheet || UI.sheet.type !== 'teamEdit') applyTeamBrand(Data.team);
+        render(); toast('Logo saved');
       } catch (e) {
-        toast(e && e.code === 'permission-denied' ? 'Could not create that team. Check the latest Firestore rules.' : 'Could not create the team. Try another team code.');
+        console.error(e);
+        if (UI.sheet && UI.sheet.type === 'teamEdit') { UI.sheet.uploading = false; renderSheet(); }
+        toast(e && e.code === 'storage/unauthorized' ? 'Couldn’t upload. Publish the latest storage.rules in Firebase (Storage, Rules).' : e && e.message && !/^Firebase/.test(e.message) ? e.message : 'Logo upload failed. Check your connection and try again.');
       }
     },
-    joinTeam() {
-      const v = prompt('Enter your team code', '');
-      const id = cleanTeamId(v);
-      if (!id) return;
-      rememberCloudTeam(id, id, 'member', 'known');
-      try { localStorage.setItem(TEAM_KEY, id); } catch (e) {}
-      const url = new URL(location.href); url.searchParams.set('team', id); url.searchParams.delete('watch'); location.href = url.toString();
+    teamLogoClear() { const sh = UI.sheet; if (!sh || sh.type !== 'teamEdit') return; sh.f.logoURL = ''; applyTeamBrand(Object.assign({}, Data.team, sh.f)); renderSheet(); },
+    brandPreset(d) {
+      const sh = UI.sheet, c = BRAND_PRESETS[+d.v]; if (!sh || sh.type !== 'teamEdit' || !c) return;
+      Object.assign(sh.f, { primaryColor: c[0], secondaryColor: c[1], baseColor: c[2] });
+      applyTeamBrand(Object.assign({}, Data.team, sh.f)); renderSheet();
+    },
+    // ----- teams: switch, create, join -----
+    teamSwitch() {
+      const u = FB.auth && FB.auth.currentUser;
+      if (Backend.kind !== 'fb') return;
+      if (!u || u.isAnonymous) return A.authOpen({ mode: 'signin' });
+      openSheet({ type: 'teams' });
+      loadMyTeams();
+    },
+    teamOpen(d) {
+      const id = cleanTeamId(d.id); if (!id) return;
+      if (id === TEAM_ID && TEAM_CHOSEN) { closeSheet(); return; }
+      goTeam(id);
+    },
+    async teamForget(d) {
+      const u = FB.auth && FB.auth.currentUser, id = cleanTeamId(d.id); if (!u || !id) return;
+      const x = localAccountTeams(u.uid); delete x[id]; saveLocalTeams(u.uid, x);
+      try { await FB.F.setDoc(FB.F.doc(FB.fs, 'users', u.uid, 'teams', id), { hidden: true, updatedAt: Date.now() }, { merge: true }); } catch (e) { /* this phone already forgot it */ }
+      if (MyTeams.list) MyTeams.list = MyTeams.list.filter((t) => t.id !== id);
+      renderSheet(); render();
+    },
+    createTeam() { return A.teamCreate(); },
+    joinTeam() { return A.teamJoin(); },
+    teamCreate() {
+      const u = FB.auth && FB.auth.currentUser;
+      if (!u || u.isAnonymous) return A.authOpen({ mode: 'account', after: 'createTeam' });
+      openSheet({ type: 'teamCreate', name: '', code: '', sfx: Math.random().toString(36).slice(2, 5), sport: 'baseball', preset: 0, me: '', err: '' });
+    },
+    teamSport(d) { if (UI.sheet) { UI.sheet.sport = d.v; renderSheet(); } },
+    teamCreateColors(d) { if (UI.sheet) { UI.sheet.preset = +d.v; renderSheet(); } },
+    async teamCreateSave() {
+      const sh = UI.sheet, u = FB.auth && FB.auth.currentUser;
+      if (!sh || sh.busy || !u) return;
+      const name = String(sh.name || '').trim().slice(0, 60);
+      const id = cleanTeamId(sh.code || suggestCode(name, sh.sfx));
+      const me = String(sh.me || u.displayName || '').trim().slice(0, 60);
+      if (!name) { sh.err = 'Enter the team name.'; return renderSheet(); }
+      if (!/^[a-z0-9][a-z0-9_-]{2,47}$/.test(id) || RESERVED_IDS.includes(id)) { sh.err = 'Pick a team code with at least 3 letters or numbers.'; return renderSheet(); }
+      if (!u.displayName && !me) { sh.err = 'Enter your name so families know who you are.'; return renderSheet(); }
+      sh.busy = true; sh.err = ''; renderSheet();
+      const c = BRAND_PRESETS[sh.preset] || BRAND_PRESETS[0];
+      try {
+        const [dir, setup] = await Promise.all([FB.F.getDoc(FB.F.doc(FB.fs, 'teams', id)), FB.F.getDoc(FB.F.doc(FB.fs, 'teams', id, 'config', 'setup'))]);
+        const mineAlready = dir.exists() && dir.data().owner === u.uid && !setup.exists();
+        if (setup.exists() || (dir.exists() && !mineAlready)) { sh.busy = false; sh.err = 'That team code is taken. Try another, like ' + id + '-' + new Date().getFullYear() + '.'; return renderSheet(); }
+        if (me && !u.displayName) { try { await FB.A.updateProfile(u, { displayName: me }); } catch (e) { /* the member record has it */ } }
+        const now = Date.now();
+        const card = { name, owner: u.uid, createdAt: now, updatedAt: now, primaryColor: c[0], secondaryColor: c[1], baseColor: c[2], logoURL: '', sport: sh.sport === 'softball' ? 'softball' : 'baseball' };
+        if (mineAlready) { const x = Object.assign({}, card); delete x.owner; delete x.createdAt; await FB.F.updateDoc(FB.F.doc(FB.fs, 'teams', id), x); }
+        else await FB.F.setDoc(FB.F.doc(FB.fs, 'teams', id), card);
+        await FB.F.setDoc(FB.F.doc(FB.fs, 'teams', id, 'config', 'setup'), { owner: u.uid, createdAt: now });
+        await FB.F.setDoc(FB.F.doc(FB.fs, 'teams', id, 'members', u.uid), { name: me || u.displayName || '', email: u.email || '', note: '', role: 'admin', status: 'approved', createdAt: now });
+        const t = defaultTeam(); Object.assign(t, { name, primaryColor: c[0], secondaryColor: c[1], baseColor: c[2], sport: card.sport, innings: sh.sport === 'softball' ? 7 : t.innings });
+        await FB.F.setDoc(FB.F.doc(FB.fs, 'teams', id, 'team', 'main'), t);
+        await rememberCloudTeam(id, name, 'owner', 'approved');
+        toast('Team created');
+        goTeam(id, 'team');
+      } catch (e) {
+        console.error(e);
+        sh.busy = false;
+        sh.err = e && e.code === 'permission-denied' ? 'The database refused that. Publish the latest firestore.rules in Firebase, or try a different team code.' : 'Couldn’t create the team. Check your connection and try again.';
+        if (UI.sheet === sh) renderSheet();
+      }
+    },
+    teamJoin(d) {
+      const u = FB.auth && FB.auth.currentUser;
+      if (!u || u.isAnonymous) return A.authOpen({ mode: 'account', after: 'joinTeam' });
+      openSheet({ type: 'teamJoin', code: (d && d.code) || '', note: '', err: '' });
+    },
+    async teamJoinSave() {
+      const sh = UI.sheet, u = FB.auth && FB.auth.currentUser;
+      if (!sh || sh.busy || !u) return;
+      let raw = String(sh.code || '').trim();
+      try { const q = new URL(raw).searchParams.get('team'); if (q) raw = q; } catch (e) { /* a plain code */ }
+      const id = cleanTeamId(raw);
+      if (!id || id === NO_TEAM) { sh.err = 'Enter the team code.'; return renderSheet(); }
+      sh.busy = true; sh.err = ''; renderSheet();
+      try {
+        const [dir, setup, mem] = await Promise.all([FB.F.getDoc(FB.F.doc(FB.fs, 'teams', id)), FB.F.getDoc(FB.F.doc(FB.fs, 'teams', id, 'config', 'setup')), FB.F.getDoc(FB.F.doc(FB.fs, 'teams', id, 'members', u.uid)).catch(() => null)]);
+        if (!setup.exists()) { sh.busy = false; sh.err = 'No team uses the code “' + id + '”. Check it with your coach.'; return renderSheet(); }
+        const tname = (dir.exists() && dir.data().name) || id;
+        const owner = setup.data().owner === u.uid;
+        let role = owner ? 'owner' : 'parent', status = owner ? 'approved' : 'pending';
+        if (mem && mem.exists()) { role = owner ? 'owner' : mem.data().role || 'parent'; status = owner ? 'approved' : mem.data().status || 'pending'; }
+        else if (!owner) await FB.F.setDoc(FB.F.doc(FB.fs, 'teams', id, 'members', u.uid), { name: u.displayName || '', email: u.email || '', note: String(sh.note || '').trim().slice(0, 80), role: 'parent', status: 'pending', createdAt: Date.now() });
+        await rememberCloudTeam(id, tname, role, status);
+        toast(status === 'approved' ? 'Opening ' + tname : 'Request sent to the coaches of ' + tname);
+        goTeam(id);
+      } catch (e) {
+        console.error(e);
+        sh.busy = false;
+        sh.err = e && e.code === 'permission-denied' ? 'The database refused that. Ask the app’s owner to publish the latest firestore.rules.' : 'Couldn’t check that code. Check your connection and try again.';
+        if (UI.sheet === sh) renderSheet();
+      }
+    },
+    async teamCodeCopy() {
+      try { await navigator.clipboard.writeText(TEAM_ID); toast('Team code copied'); } catch (e) { toast('Team code: ' + TEAM_ID); }
+    },
+    async teamLinkShare() {
+      const url = teamLink(), text = 'Join ' + teamTitle() + ' on ' + APP_NAME + '. Open this link, create an account, and a coach will approve you. Team code: ' + TEAM_ID;
+      if (navigator.share) { try { await navigator.share({ title: teamTitle(), text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+      try { await navigator.clipboard.writeText(text + '\n' + url); toast('Join link copied'); } catch (e) { toast(url); }
+    },
+    expandToggle(d) {
+      const k = d.key, open = !UI.expand[k];
+      UI.expand[k] = open; render();
+      if (!open) { const h = document.getElementById('sec-' + k); if (h && h.getBoundingClientRect().top < 0) h.scrollIntoView({ block: 'start' }); }
     },
     extraWork() { UI.tab='extra'; render(); },
     extraAdd(d) { openSheet({type:'extraWork',playerId:d.id,date:todayISO(),minutes:30,parent:'',drills:[],err:''}); },
@@ -6377,7 +6745,6 @@ body.viewer-on { overflow: hidden; }
     practiceEdit(d) { if(!Access.isAdmin)return; const p=Data.practices[d.id]; if(p)openSheet({type:'practice',id:p.id,f:{date:p.date||'',time:p.time||'',endTime:p.endTime||'',location:p.location||'',notes:p.notes||''}}); },
     practiceSave() { const sh=UI.sheet;if(!Access.isAdmin||!sh||sh.type!=='practice')return; if(!sh.f.date){sh.err='Choose a date.';return renderSheet()} const id=sh.id||uid('p'),p={id,...sh.f,updatedAt:Date.now()};Data.practices[id]=p;Saver.put('practices/'+id,p);closeSheet();render(); },
     practiceDelete(d) { if(!Access.isAdmin||!d.id||!confirm('Delete this practice?'))return;delete Data.practices[d.id];removePath('practices/'+d.id,'practice');closeSheet();render(); },
-    teamSwitch() { return openTeamsHub(); },
     async camOpen() {
       const g = liveGame();
       if (!g) { toast('Start the game first, then stream it.'); return; }
@@ -6537,8 +6904,8 @@ body.viewer-on { overflow: hidden; }
     const reader = new FileReader();
     reader.onload = () => {
       let d;
-      try { d = JSON.parse(reader.result); } catch (e) { toast("That file isn't a The Hub backup."); return; }
-      if (!d || !['gs-baseball','the-sports-hub'].includes(d.app) || !Array.isArray(d.games)) { toast("That file isn't a The Hub backup."); return; }
+      try { d = JSON.parse(reader.result); } catch (e) { toast("That file isn't a backup from this app."); return; }
+      if (!d || !['gs-baseball','the-sports-hub'].includes(d.app) || !Array.isArray(d.games)) { toast("That file isn't a backup from this app."); return; }
       confirmSheet('Import this backup?', `It has ${d.games.length} game${d.games.length === 1 ? '' : 's'} and ${(d.team && d.team.players || []).length} players. Games with the same ID are replaced, and the roster is replaced by the one in the backup.`, 'Import', () => {
         Data.team = normTeam(d.team);
         saveTeam();
@@ -6571,6 +6938,14 @@ body.viewer-on { overflow: hidden; }
   document.addEventListener('input', (ev) => {
     const el = ev.target;
     if (el.dataset && el.dataset.bind && UI.sheet) setPath(UI.sheet, el.dataset.bind, el.value);
+    // Live preview while a coach picks colors.
+    if (el.dataset && el.dataset.brand && UI.sheet && UI.sheet.type === 'teamEdit') applyTeamBrand(Object.assign({}, Data.team, UI.sheet.f));
+    // Suggest a team code from the name until the coach types their own.
+    if (el.dataset && el.dataset.tc && UI.sheet && UI.sheet.type === 'teamCreate' && !UI.sheet.codeTouched) {
+      UI.sheet.code = suggestCode(UI.sheet.name, UI.sheet.sfx);
+      const c = document.querySelector('#sheet-root [data-bind="code"]'); if (c) c.value = UI.sheet.code;
+    }
+    if (el.dataset && el.dataset.bind === 'code' && UI.sheet && UI.sheet.type === 'teamCreate') UI.sheet.codeTouched = true;
   });
   document.addEventListener('change', (ev) => {
     const el = ev.target;
@@ -6600,7 +6975,8 @@ body.viewer-on { overflow: hidden; }
       if (!Saver.busy('team/main')) Data.team = normTeam(snap.exists ? clone(snap.data()) : null);
       Data.loaded.team = true;
       applyTeamBrand(Data.team);
-      document.title = (Data.team.name || 'The Hub') + ' | The Hub';
+      document.title = (Data.team.name || APP_NAME) + (Data.team.name && Data.team.name !== APP_NAME ? ' | ' + APP_NAME : '');
+      dirSync();
       maybeReady();
     }, onDbError));
     subs.push(db.collection('games').onSnapshot((snap) => {

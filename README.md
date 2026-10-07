@@ -1,25 +1,30 @@
-# The Hub
+# The Hub — white-label team app
 
-Multi-team/white-label development branch derived from the GS Baseball Hub. Each customer team is isolated under `teams/{teamId}` in Firestore. Select a team with `?team=team-slug`; the app remembers the selection locally.
+A phone-first team app for baseball and softball: pitch-by-pitch scoring, box scores and season stats, spray charts and scouting, live video with the scoreboard on top, team chat and announcements, tournament fees, Swing AI and player drills.
 
-## Multi-team additions
+It's built to be sold to many teams at once. Every team brands it as their own and keeps its data completely separate.
 
-- Team-scoped Firestore data
-- Team-specific local cache and watch links
-- Dynamic team name, logo URL, primary and secondary colors
-- Team switcher in the header
-- Generic The Hub PWA metadata
-- Backups identify the team ID
+## What's new in this version
 
-> Publish the included multi-tenant `firestore.rules` before using this build with real customer data.
+- **Self-branding.** Coaches set the team name, upload a logo, and pick main, accent and background colors (or a one-tap color set) under **Team → Team settings & branding**. Colors preview live. The logo and colors show on the top bar, the sign-in screen, scoreboards and buttons, and the iPhone home-screen name.
+- **Coaches can run many teams.** **Teams → + Create a team** any time. Each team gets its own code, roster, games, chat and families.
+- **Families can be on many teams.** **Teams → Join a team** with the code the coach shares. A coach approves them, then the team shows up in their list.
+- **Team switcher.** The **Teams** button at the top (or tapping the team name) lists every team you're on, with logo, your role and whether you're still waiting for approval. Tap one to switch. A new phone opens the team you used last.
+- **Team code and join link.** Coaches see the team code on the Team tab, with **Copy code** and **Share join link**.
+- **Expandable lists.** On the Team tab, the **Roster**, **Coaches & staff**, **Families** and **Opponent rosters** show the first few names with **Show all** to expand and **Show less** to fold back. Each heading shows the count.
+
+## Setting it up
+
+See **[SETUP.md](SETUP.md)** for the one-time setup (Firebase, rules, hosting, the Cloudflare Worker, notifications) and what to do before charging teams.
+
+## How teams get started
+
+1. A coach opens your app, taps **Create Account**, then **Create a team** (name, code, sport, colors).
+2. On the Team tab they open **Team settings & branding** to upload a logo and fine-tune colors.
+3. They share the **team code** or **join link** with families and other coaches.
+4. Families create an account, join with the code, and the coach approves them under **Team → Waiting for approval**. To make someone a coach, tap their name and choose **Coach**.
 
 ---
-
-## Original GS Baseball documentation
-
-# GS Baseball Hub
-
-The team's hub: score games pitch by pitch, keep box scores and season stats, chart spray charts, scout opponents, stream games, and chat as a team. It runs at **https://scorebook.stingerz-baseball.com**, with coach logins and view-only access for families.
 
 ## Who can do what
 
@@ -39,8 +44,8 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 | Delete anyone's chat message | Yes | No | No | No |
 | Approve families, add coaches and camera operators, change who can watch | Yes | No | No | No |
 
-- The **owner** is the first account created on the site. The owner is always an admin.
-- New people tap **Request access**. A coach approves them on **Team → Families & coaches**, then taps their name to make them a coach, a **scorekeeper** or a **camera operator** if needed. A scorekeeper keeps score (new games, lineups, every pitch) and can do everything a family can, but can't change the roster, team settings or members, or delete games. Link a scorekeeper to their own player the same way as a family.
+- The **owner** is the coach who created the team. The owner is always an admin.
+- New people tap **Join a team** and type the team code (or open the join link, or tap **Ask to join**). A coach approves them on **Team → Families & coaches**, then taps their name to make them a coach, a **scorekeeper** or a **camera operator** if needed. A scorekeeper keeps score (new games, lineups, every pitch) and can do everything a family can, but can't change the roster, team settings or members, or delete games. Link a scorekeeper to their own player the same way as a family.
 - **Who can watch** (same screen): **Approved families**, where parents create an account and a coach approves it, or **Anyone with the link**, with no sign-in needed to watch.
 - The database itself enforces these rules (`firestore.rules`). Hiding buttons isn't the only protection. After updating `firestore.rules` here, paste it into Firebase again and **Publish**.
 
@@ -116,7 +121,7 @@ Open **Swing AI** from the card at the top of the **Stats** tab or on the **Inst
 - **Who sees what:** coaches can analyze anyone and see every swing. A family can analyze and see only the player linked to their account (Team, Families & coaches).
 - The first time, the phone downloads the AI (about 13 MB, then kept for offline use). It needs a recent Safari or Chrome.
 
-Needs the latest `firestore.rules` published. The engine files in `swing/` come from GS Baseball Scout; `swing/app.js` is the Hub's Swing AI page.
+Needs the latest `firestore.rules` published. `swing/app.js` is the Hub's Swing AI page.
 
 ## Defense Drills
 
@@ -141,7 +146,7 @@ The scoring phone keeps working when the field has no service:
 
 - **Keep scoring.** Every pitch and play is saved on the phone the moment you tap it. The status at the top turns yellow and says **Saved on phone**; tap it for a reminder of what's happening.
 - **It syncs on its own.** When service comes back, everything goes up in order and the status turns green (**Synced**). Families' Live screens jump to the current score and notifications go out then.
-- **Closing the app is safe.** If the Hub gets closed or the phone restarts with no signal, open GS Hub again: it opens from the copy saved on the phone, picks up the unsynced plays, and you keep scoring.
+- **Closing the app is safe.** If the Hub gets closed or the phone restarts with no signal, open the app again: it opens from the copy saved on the phone, picks up the unsynced plays, and you keep scoring.
 - **Before game day,** open the Hub once with signal on each scoring phone (after any update) so the phone has its saved copy. Viewing works offline too, but families see the last score that reached them.
 - Live video, chat photos, roster scanning and scouting reports need signal.
 
@@ -177,8 +182,8 @@ Photos are private to the team. They're stored in your Cloudflare account (R2), 
 
 **Setting up photo storage (one time):**
 
-1. In [Cloudflare](https://dash.cloudflare.com), open **R2 Object Storage** and choose **Create bucket**. Name it `gs-hub-photos` and keep the default location. (If Cloudflare asks you to turn on R2 first, do that. The free tier covers 10 GB of storage a month, roughly 30,000 chat photos.)
-2. Open your Worker, then **Settings → Bindings → Add → R2 bucket**. Set the variable name to `PHOTOS`, pick `gs-hub-photos`, and deploy.
+1. In [Cloudflare](https://dash.cloudflare.com), open **R2 Object Storage** and choose **Create bucket**. Name it something like `hub-photos` and keep the default location. (If Cloudflare asks you to turn on R2 first, do that. The free tier covers 10 GB of storage a month, roughly 30,000 chat photos.)
+2. Open your Worker, then **Settings → Bindings → Add → R2 bucket**. Set the variable name to `PHOTOS`, pick your bucket, and deploy.
 3. Open the Worker's **Edit code**, paste the latest [`worker.js`](worker.js), and **Deploy**.
 
 Photos also need the `FIREBASE_SERVICE_ACCOUNT` secret, which the Worker already uses for notifications.
@@ -187,7 +192,7 @@ Photos also need the `FIREBASE_SERVICE_ACCOUNT` secret, which the Worker already
 
 Anyone with an approved account can get phone notifications, even when the Hub is closed: new chat messages, game starts, every run, and final scores. Each game update replaces the one before it, so the lock screen works like a live scoreboard. Each person turns them on under **Team → Notifications** and picks what they want: team chat on or off, and game updates for **Runs & final**, **Every half-inning**, or **Off**.
 
-- **iPhone (iOS 16.4 or later):** notifications only work from the Home Screen app. Open the Hub in Safari → **Share** → **Add to Home Screen**, open **GS Hub** from the Home Screen, sign in, then turn notifications on.
+- **iPhone (iOS 16.4 or later):** notifications only work from the Home Screen app. Open the Hub in Safari → **Share** → **Add to Home Screen**, open **the app** from the Home Screen, sign in, then turn notifications on.
 - **Android:** works in Chrome. Adding it to the home screen is optional.
 
 A true live scoreboard on the iPhone lock screen or Dynamic Island (a Live Activity) needs an App Store app, so the Hub uses replacing notifications instead.
@@ -195,18 +200,8 @@ A true live scoreboard on the iPhone lock screen or Dynamic Island (a Live Activ
 The Cloudflare Worker sends the notifications. It needs:
 
 1. **`FIREBASE_SERVICE_ACCOUNT`** secret: in Firebase, **Project settings → Service accounts → Generate new private key**, then paste the whole downloaded file as the secret's value. Treat that file like a password: don't email it or put it anywhere else.
-2. **A Cron Trigger:** in the Worker, **Settings → Trigger events → Add → Cron Triggers**, every minute (`* * * * *`). The scorebook also nudges the Worker the moment a coach scores a pitch or someone sends a chat message, so most notifications arrive within a few seconds; the cron check catches anything missed.
+2. **A Cron Trigger:** in the Worker, **Settings → Trigger events → Add → Cron Triggers**, every minute (`* * * * *`). The app also nudges the Worker the moment a coach scores a pitch or someone sends a chat message, so most notifications arrive within a few seconds; the cron check catches anything missed.
 3. A coach has saved the Worker under **Team → Cloudflare Worker** at least once, so families' phones know where to nudge it.
-
-## First-time setup
-
-1. **Turn on GitHub Pages.** In this repo: **Settings → Pages**. Under *Build and deployment*, choose **Deploy from a branch**, **main**, **/ (root)**, then **Save**. The custom domain should fill in as `scorebook.stingerz-baseball.com` from the `CNAME` file.
-2. **Point the address at GitHub.** In GoDaddy: **My Products → stingerz-baseball.com → DNS → Add New Record**:
-   - Type **CNAME**, Name **scorebook**, Value **keubanks16.github.io**, TTL default.
-   Wait until GitHub's Pages settings shows the DNS check passed (minutes to an hour), then tick **Enforce HTTPS**.
-3. **Publish the security rules.** In Firebase: **Databases & Storage → Firestore → Rules**. Replace everything with the contents of [`firestore.rules`](firestore.rules) and tap **Publish**.
-4. **Create the admin account.** Open the scorebook and tap **Create the admin account**. Do this before sharing the address, because the first account becomes the owner.
-5. **Bring over existing games** (optional). In the old copy, **Team → Export backup**. Here, **Team → Import backup**.
 
 ## Live video
 
@@ -214,7 +209,7 @@ During a live game, families see the video on the Live tab with the scoreboard (
 
 ### Built-in camera (Cloudflare Stream)
 
-A second phone streams straight from the scorebook. Families watch inside the scorebook less than a second behind real life, so the video and the score always match. The video only plays in the scorebook, so your "who can watch" setting covers it.
+A second phone streams straight from the app. Families watch inside the app less than a second behind real life, so the video and the score always match. The video only plays in the app, so your "who can watch" setting covers it.
 
 **One-time setup**
 
@@ -222,15 +217,15 @@ A second phone streams straight from the scorebook. Families watch inside the sc
 2. Create an API token: profile icon → **My Profile → API Tokens → Create Token → Create Custom Token**, permission **Account · Stream · Edit**.
 3. In your Worker's **Settings → Variables and Secrets**, add `CF_STREAM_TOKEN` (Secret, the token) and `CF_ACCOUNT_ID` (Text, your Cloudflare account ID).
 4. Paste the latest [`worker.js`](worker.js) into the Worker (**Edit code**) and deploy.
-5. On the camera phone: sign in to the scorebook as a coach and set up **Team → Cloudflare Worker**.
+5. On the camera phone: sign in to the app as a coach and set up **Team → Cloudflare Worker**.
 
 **Each game**
 
-1. Start the game in the scorebook (on any coach's phone).
+1. Start the game in the app (on any coach's phone).
 2. On the camera phone: **Live → Stream video → Go Live**. Mount it sideways behind the plate and plug in a battery pack. Keep the screen on; locking the phone pauses the stream (tap **Resume**).
 3. When the game ends: **End stream** (tap twice).
 
-**Saving the game:** Cloudflare doesn't record these streams, so the camera phone records the game itself in 10-second pieces. After the game, on the camera phone: **Get video → Save to phone** (from the end screen, or **Team → Game videos on this phone**), upload it to YouTube as **Unlisted**, and paste the link under the game's **Edit details**. Then delete it from the scorebook to free up space. A 2-hour game takes about 2 GB.
+**Saving the game:** Cloudflare doesn't record these streams, so the camera phone records the game itself in 10-second pieces. After the game, on the camera phone: **Get video → Save to phone** (from the end screen, or **Team → Game videos on this phone**), upload it to YouTube as **Unlisted**, and paste the link under the game's **Edit details**. Then delete it from the app to free up space. A 2-hour game takes about 2 GB.
 
 **Camera operators** can do all of this on their own phone: sign in, then **Live → Stream video**. The Cloudflare Worker connection is shared with them automatically, so they don't need the access code.
 
@@ -239,13 +234,13 @@ A second phone streams straight from the scorebook. Families watch inside the sc
 Instead of the built-in camera, you can stream to YouTube from a streaming app. Free, saves every game, and anyone with the link can watch. YouTube runs 10 to 30 seconds behind, so each viewer can set **Score delay** under the video to keep the scoreboard from spoiling plays.
 
 1. **Get your channel ID.** In YouTube Studio: **Settings → Channel → Advanced settings**. It starts with `UC`.
-2. **Add it to the scorebook.** **Team → Live video → Set up**.
+2. **Add it to the app.** **Team → Live video → Set up**.
 3. **Get your stream key.** In YouTube Studio: **Create → Go live → Stream**. Copy the **Stream URL** and **Stream key**, turn on auto-start and auto-stop, and choose **Low latency**.
 4. **Set up a streaming app** such as Larix Broadcaster with the URL `rtmp://a.rtmp.youtube.com/live2/` followed by your key. Streaming this way doesn't need 50 subscribers; going live from the YouTube app does.
 
 Each game, start the stream in the app. **Public** streams appear automatically; for an **Unlisted** stream, paste that game's link under the game's **Edit details**.
 
-When a built-in camera stream is live, the scorebook shows it; otherwise it shows YouTube.
+When a built-in camera stream is live, the app shows it; otherwise it shows YouTube.
 
 ## YouTube uploads
 
@@ -255,14 +250,14 @@ When a built-in camera stream ends, the camera phone can upload the game video t
 
 **One-time setup** (Google Cloud, easiest on a computer)
 
-1. Go to [console.cloud.google.com](https://console.cloud.google.com) and pick the **stingerz-scorebook** project at the top (the same project as Firebase).
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) and pick your Firebase project at the top (the same project as Firebase).
 2. **APIs & Services → Library**, search **YouTube Data API v3**, and tap **Enable**.
-3. **Google Auth Platform** (or **APIs & Services → OAuth consent screen**) → **Get started**. App name `GS Baseball Scorebook`, your email, audience **External**, then **Create**.
+3. **Google Auth Platform** (or **APIs & Services → OAuth consent screen**) → **Get started**. App name your app name, your email, audience **External**, then **Create**.
 4. **Audience → Test users → Add users**: add the Google account that owns your YouTube channel, plus anyone else who will upload.
 5. **Data access → Add or remove scopes**: tick `.../auth/youtube.upload` and save.
-6. **Clients → Create client**: type **Web application**, name `Scorebook`, and under **Authorized JavaScript origins** add `https://scorebook.stingerz-baseball.com`. Create it and copy the **Client ID**.
-7. In the scorebook: **Team → YouTube uploads → Set up**, paste the Client ID, and save. Leave **Add the replay to the game page** off for now.
-8. Apply for the review at [support.google.com/youtube/contact/yt_api_form](https://support.google.com/youtube/contact/yt_api_form). Explain that it's a youth baseball team's own scorebook that uploads game video only to the team's own channel, non-commercial, at https://scorebook.stingerz-baseball.com. Reviews have taken from a few days to a few months.
+6. **Clients → Create client**: type **Web application**, name `Scorebook`, and under **Authorized JavaScript origins** add `your app address`. Create it and copy the **Client ID**.
+7. In the app: **Team → YouTube uploads → Set up**, paste the Client ID, and save. Leave **Add the replay to the game page** off for now.
+8. Apply for the review at [support.google.com/youtube/contact/yt_api_form](https://support.google.com/youtube/contact/yt_api_form). Explain what your app does and that it uploads game video only to each team's own channel. Reviews have taken from a few days to a few months.
 9. Once Google approves, turn on **Add the replay to the game page**.
 
 **Each game:** when the camera phone taps **End stream**, Google asks which account to use (the first time, it warns the app isn't verified; tap **Continue**, since it's your own app). Pick the channel's account and the upload starts. Keep the screen on until it says **On YouTube**. If it stops, tap **Continue upload** and it picks up where it left off. Uploads use about 1 GB per hour of video, so use Wi-Fi if you can. You can also upload later from **Team → Game videos on this phone**.
@@ -275,14 +270,17 @@ Roster photo scanning, scouting reports, the built-in camera, chat photos, fee r
 
 | Name | Type | What it's for |
 | --- | --- | --- |
-| `ACCESS_CODE` | Secret | Any passphrase; coaches type it into the scorebook |
+| `ACCESS_CODE` | Secret | Any long passphrase. Used inside the Worker; coaches don't need it when they're signed in |
 | `ANTHROPIC_API_KEY` | Secret | Roster photos and scouting reports ([console.anthropic.com](https://console.anthropic.com)) |
 | `CF_STREAM_TOKEN` | Secret | Built-in camera (Account · Stream · Edit token) |
 | `CF_ACCOUNT_ID` | Text | Built-in camera (your Cloudflare account ID) |
 | `FIREBASE_SERVICE_ACCOUNT` | Secret | Phone notifications, chat photos and tournament fees (see [Notifications](#notifications)) |
-| `ALLOWED_ORIGIN` | Text | Optional. Defaults to `https://scorebook.stingerz-baseball.com,https://keubanks16.github.io` |
+| `ALLOWED_ORIGIN` | Text | **Required.** Your app's address, e.g. `https://app.yourdomain.com` (comma-separate several) |
+| `REQUIRE_ACTIVE` | Text | Optional. `1` = AI, live video and chat photos only for paying teams (see SETUP.md, Billing) |
+| `APP_NAME` | Text | Optional. Your app's name in notifications |
+| `TEAM_IDS` | Text | Optional. Teams are found automatically; not needed |
 
-In the scorebook, each coach's phone needs **Team → Cloudflare Worker → Set up**: paste the Worker address and access code, tap **Test connection**, then **Save**.
+When `workerUrl` is set in `index.html`, every team uses your Worker automatically and coaches are recognized by their sign-in. A team can still connect its own Worker under **Team → Cloudflare Worker**.
 
 To create the Worker from scratch: in [Cloudflare](https://dash.cloudflare.com), create a Worker from "Hello World", choose **Edit code**, paste [`worker.js`](worker.js), deploy, then add the variables above, the `PHOTOS` R2 bucket binding (see [Photos in the chat](#photos-in-the-chat)), and the every-minute Cron Trigger.
 
@@ -295,15 +293,10 @@ To create the Worker from scratch: in [Cloudflare](https://dash.cloudflare.com),
 
 | File | What it is |
 | --- | --- |
-| `index.html` | The whole app in one page, including the Firebase settings |
-| `firestore.rules` | Database security rules: owner, coaches, families, who can watch |
-| `worker.js` | Cloudflare Worker: holds the API key, opens private Cloudflare streams for the camera phone, stores and shows chat photos, and sends notifications |
-| `firebase-messaging-sw.js` | Keeps a copy of the Hub on the phone so it opens and scores with no signal, and shows notifications when the app is closed |
-| `CNAME` | Tells GitHub Pages to serve this at scorebook.stingerz-baseball.com |
-| `icons/`, `manifest.webmanifest` | Home-screen icon and app settings |
-
-The Firebase settings in `index.html` (apiKey and the rest) identify the project and are meant to be public. The security rules are what protect the data.
-
-
-## The Hub onboarding
-The default gate now uses Create Account / Sign In, followed by Create a Team / Join a Team. New teams receive their own team code and isolated Firestore namespace.
+| `index.html` | The whole app in one page. The settings block near the top (`GS_FIREBASE`, `HUB_CONFIG`) is the only part you edit |
+| `firestore.rules` | Database security rules: every team is isolated under `teams/{teamId}` |
+| `storage.rules` | Who can upload team logos |
+| `worker.js` | Cloudflare Worker: AI roster/scouting, live video, chat photos, fee reminders and notifications for every team |
+| `firebase-messaging-sw.js` | Offline copy of the app and notifications when the app is closed |
+| `icons/`, `media/`, `manifest.webmanifest` | Your app's own icon, logo and home-screen settings |
+| `swing/`, `retro/` | Swing AI and Defense Drills |

@@ -12,17 +12,22 @@
 //   fees    tournament fee reminder notifications to families who haven't paid yet.
 //
 // Set these in the Worker's Settings -> Variables and Secrets:
-//   ACCESS_CODE        Secret  any passphrase you make up; coaches type it into the scorebook
+//   ACCESS_CODE        Secret  any passphrase you make up. Optional for coaches: signed-in team coaches
+//                              are recognized by their sign-in, so most teams never need the code.
 //   ANTHROPIC_API_KEY  Secret  your key from console.anthropic.com (roster photos, scouting reports)
 //   CF_STREAM_TOKEN    Secret  Cloudflare API token with Account > Stream > Edit (live video)
 //   CF_ACCOUNT_ID      Text    your Cloudflare account ID (live video)
 //   FIREBASE_SERVICE_ACCOUNT  Secret  the whole service-account .json file from Firebase (notifications, photos, fees)
 // and under Settings -> Bindings add an R2 bucket with the variable name PHOTOS (chat photos),
 // and under Settings -> Triggers add a Cron Trigger that runs every minute (* * * * *).
-//   ALLOWED_ORIGIN     Text    optional; defaults to the scorebook site and keubanks16.github.io
+//   ALLOWED_ORIGIN     Text    REQUIRED: your app's address(es), comma separated, e.g. https://app.example.com
+//   REQUIRE_ACTIVE     Text    optional; "1" = AI, live video and photos only for teams whose teams/{id}
+//                              document has active: true (set it in the Firebase console when a team pays)
+//   TEAM_IDS           Text    optional; teams are found automatically. Only needed for very old teams.
 //   MODEL              Text    optional; defaults to claude-sonnet-5-5
+//   APP_NAME           Text    optional; your app's name in notifications (defaults to The Hub)
 
-const DEFAULT_ORIGIN = 'https://scorebook.stingerz-baseball.com,https://keubanks16.github.io';
+const DEFAULT_ORIGIN = 'http://localhost:8080';
 const DEFAULT_MODEL = 'claude-sonnet-5-5';
 const CLAUDE_TASKS = { roster: 2000, scout: 1000, ping: 5 }; // max output tokens per job
 const STREAM_TASKS = ['live-start', 'live-end'];
@@ -39,8 +44,14 @@ const cleanTeamId = (v) => String(v || '').toLowerCase().trim().replace(/[^a-z0-
 
 export default {
   async scheduled(event, env, ctx) {
-    const ids = String(env.TEAM_IDS || 'gs-baseball').split(',').map(cleanTeamId).filter(Boolean);
-    ctx.waitUntil(Promise.all(ids.map((id) => notifyRun(env, null, null, id).catch(() => {}))));
+    // Every team in the directory (teams/{id}) plus any listed in TEAM_IDS.
+    ctx.waitUntil((async () => {
+      const ids = new Set(String(env.TEAM_IDS || '').split(',').map(cleanTeamId).filter(Boolean));
+      try { for (const id of await listTeamIds(env)) ids.add(id); } catch (e) { /* use TEAM_IDS only */ }
+      const all = [...ids];
+      // A few at a time so one slow team never holds up the rest.
+      for (let i = 0; i < all.length; i += 8) await Promise.all(all.slice(i, i + 8).map((id) => notifyRun(env, null, null, id).catch(() => {})));
+    })());
   },
   async fetch(request, env, ctx) {
     // Notification fan-out from this same Worker (no browser involved).
@@ -77,14 +88,24 @@ export default {
     const task = body && body.task;
     // Anyone on the site may ask for a notification check; it only sends what's new.
     if (task === 'notify-check') {
-      ctx.waitUntil(notifyRun(env, here.origin, allowed[0], cleanTeamId(request.headers.get('x-team-id')) || 'gs-baseball').catch(() => {}));
+      const tid = cleanTeamId(request.headers.get('x-team-id') || body.teamId);
+      if (tid) ctx.waitUntil(notifyRun(env, here.origin, allowed[0], tid).catch(() => {}));
       return reply(202, { ok: true });
     }
     // Team members prove who they are with their Hub sign-in, not the coaches' access code.
     if (PHOTO_TASKS.includes(task)) return photoTask(task, request, body, env, reply, ctx, here.origin, allowed[0]);
     if (PAY_TASKS.includes(task)) return payTask(task, request, body, env, reply, allowed);
-    if (!env.ACCESS_CODE) return reply(500, { error: 'not_configured', detail: 'Add ACCESS_CODE as a secret.' });
-    if (!sameText(request.headers.get('x-gs-code') || '', String(env.ACCESS_CODE))) return reply(401, { error: 'bad_code' });
+    // Coaches (and camera operators, for live video) are recognized by their sign-in for their team.
+    // The shared ACCESS_CODE still works for setups that use it.
+    const codeOk = !!env.ACCESS_CODE && sameText(request.headers.get('x-gs-code') || '', String(env.ACCESS_CODE));
+    if (!codeOk) {
+      if (!request.headers.get('authorization')) return reply(401, { error: 'bad_code' });
+      let u;
+      try { u = await hubUser(request, env); } catch (e) { return reply(e.status || 401, { error: e.error || 'bad_code' }); }
+      const role = (u.member && u.member.role) || '';
+      const ok = STREAM_TASKS.includes(task) ? (u.admin || role === 'camera') : (u.admin || role === 'scorer');
+      if (!ok) return reply(403, { error: 'not_allowed', detail: 'Only coaches can use this.' });
+    }
     if (STREAM_TASKS.includes(task)) return stream(task, body, env, reply);
     if (!Object.prototype.hasOwnProperty.call(CLAUDE_TASKS, task)) return reply(400, { error: 'bad_request', detail: 'Unknown task.' });
     if (!env.ANTHROPIC_API_KEY) return reply(500, { error: 'not_configured', detail: 'Add ANTHROPIC_API_KEY as a secret.' });
@@ -235,12 +256,14 @@ async function hubUser(request, env) {
   if (!m) throw { status: 401, error: 'signed_out' };
   const uid = await verifyIdToken(m[1], sa.project_id);
   if (!uid) throw { status: 401, error: 'signed_out' };
-  const teamId = cleanTeamId(request.headers.get('x-team-id')) || 'gs-baseball';
+  const teamId = cleanTeamId(request.headers.get('x-team-id'));
+  if (!teamId) throw { status: 400, error: 'no_team' };
   const db = firestore(sa.project_id, await googleToken(sa), teamId);
-  const [member, setup] = await Promise.all([db.get('members/' + uid), db.get('config/setup')]);
+  const [member, setup, dir] = await Promise.all([db.get('members/' + uid), db.get('config/setup'), env.REQUIRE_ACTIVE === '1' ? db.get('') : null]);
   const owner = !!(setup && setup.owner === uid);
   const approved = !!(member && member.status === 'approved');
   if (!owner && !approved) throw { status: 403, error: 'not_approved' };
+  if (env.REQUIRE_ACTIVE === '1' && !(dir && dir.active === true)) throw { status: 402, error: 'inactive' };
   return { uid, teamId, db, sa, owner, member: member || {}, admin: owner || (approved && member.role === 'admin'), name: member && member.name };
 }
 // Checks a Firebase sign-in token against Google's published keys. Returns the user id, or null.
@@ -344,7 +367,7 @@ async function payTask(task, request, body, env, reply, allowed) {
         if (!toks.length) { noApp.push(name(pid)); continue; }
         reached.push(pid);
         const due = dueText(fee.due);
-        for (const t of toks) items.push({ id: t._id, token: t.token, title: 'Fee reminder: ' + String(fee.name || 'Tournament'), body: money(Number(fee.amount) || 0) + ' for ' + name(pid) + (due ? ' is due ' + due : ' is due') + '. Tap to pay.', tag: 'fee-' + feeId + '-' + pid, link: site + '/#team', icon: site + '/icons/icon-192.png' });
+        for (const t of toks) items.push({ id: t._id, token: t.token, title: 'Fee reminder: ' + String(fee.name || 'Tournament'), body: money(Number(fee.amount) || 0) + ' for ' + name(pid) + (due ? ' is due ' + due : ' is due') + '. Tap to pay.', tag: 'fee-' + feeId + '-' + pid, link: site + '/?team=' + encodeURIComponent(u.teamId) + '#team', icon: site + '/icons/icon-192.png' });
       }
       if (items.length) await sendItems(u.sa.project_id, await googleToken(u.sa), items.slice(0, 60), u.db);
       return reply(200, { reminded: reached.length, noApp });
@@ -393,26 +416,46 @@ function fsEnc(v) {
   if (v && typeof v === 'object') { const fields = {}; for (const k in v) fields[k] = fsEnc(v[k]); return { mapValue: { fields } }; }
   return { nullValue: null };
 }
+// Lists every team in the directory (teams/{id} documents) for the every-minute check.
+async function listTeamIds(env) {
+  if (!env.FIREBASE_SERVICE_ACCOUNT) return [];
+  const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
+  const tok = await googleToken(sa);
+  const ids = [];
+  let page = '';
+  for (let n = 0; n < 20; n++) {
+    const r = await fetch('https://firestore.googleapis.com/v1/projects/' + sa.project_id + '/databases/(default)/documents/teams?pageSize=300&mask.fieldPaths=name' + (page ? '&pageToken=' + encodeURIComponent(page) : ''), { headers: { Authorization: 'Bearer ' + tok } });
+    if (!r.ok) break;
+    const d = await r.json();
+    for (const doc of d.documents || []) ids.push(cleanTeamId(doc.name.split('/').pop()));
+    if (!d.nextPageToken) break;
+    page = d.nextPageToken;
+  }
+  return ids.filter(Boolean);
+}
 function firestore(pid, tok, teamId) {
-  teamId = cleanTeamId(teamId) || 'gs-baseball';
-  const base = 'https://firestore.googleapis.com/v1/projects/' + pid + '/databases/(default)/documents/teams/' + encodeURIComponent(teamId);
+  teamId = cleanTeamId(teamId);
+  if (!teamId) throw new Error('no team');
+  const root = 'https://firestore.googleapis.com/v1/projects/' + pid + '/databases/(default)/documents';
+  const base = root + '/teams/' + encodeURIComponent(teamId);
+  const docName = (col, id) => 'projects/' + pid + '/databases/(default)/documents/teams/' + teamId + '/' + col + '/' + id;
   const H = { Authorization: 'Bearer ' + tok, 'content-type': 'application/json' };
   const docOut = (d) => Object.assign(fsObj(d.fields), { _id: d.name.split('/').pop(), _updateTime: d.updateTime });
   return {
-    async get(path) { const r = await fetch(base + '/' + path, { headers: H }); if (r.status === 404) return null; if (!r.ok) throw new Error('firestore get ' + r.status); return docOut(await r.json()); },
+    async get(path) { const r = await fetch(path ? base + '/' + path : base, { headers: H }); if (r.status === 404) return null; if (!r.ok) throw new Error('firestore get ' + r.status); return docOut(await r.json()); },
     // New document with a random id; timeField (if given) is set to the server's clock, like serverTimestamp().
     async create(col, data, timeField) {
       const id = hexRand(10);
-      const write = { update: { name: 'projects/' + pid + '/databases/(default)/documents/' + col + '/' + id, fields: fsEnc(data).mapValue.fields }, currentDocument: { exists: false } };
+      const write = { update: { name: docName(col, id), fields: fsEnc(data).mapValue.fields }, currentDocument: { exists: false } };
       if (timeField) write.updateTransforms = [{ fieldPath: timeField, setToServerValue: 'REQUEST_TIME' }];
-      const r = await fetch(base + ':commit', { method: 'POST', headers: H, body: JSON.stringify({ writes: [write] }) });
+      const r = await fetch(root + ':commit', { method: 'POST', headers: H, body: JSON.stringify({ writes: [write] }) });
       return r.ok ? id : null;
     },
     // Same as create, with a chosen id; does nothing if that document already exists.
     async createAt(col, id, data, timeField) {
-      const write = { update: { name: 'projects/' + pid + '/databases/(default)/documents/' + col + '/' + id, fields: fsEnc(data).mapValue.fields }, currentDocument: { exists: false } };
+      const write = { update: { name: docName(col, id), fields: fsEnc(data).mapValue.fields }, currentDocument: { exists: false } };
       if (timeField) write.updateTransforms = [{ fieldPath: timeField, setToServerValue: 'REQUEST_TIME' }];
-      const r = await fetch(base + ':commit', { method: 'POST', headers: H, body: JSON.stringify({ writes: [write] }) });
+      const r = await fetch(root + ':commit', { method: 'POST', headers: H, body: JSON.stringify({ writes: [write] }) });
       return r.ok;
     },
     async del(path) { const r = await fetch(base + '/' + path, { method: 'DELETE', headers: H }).catch(() => null); return !!(r && (r.ok || r.status === 404)); },
@@ -459,7 +502,11 @@ async function notifyRun(env, self, site, teamId) {
   const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
   const pid = sa.project_id;
   const tok = await googleToken(sa);
-  const db = firestore(pid, tok, cleanTeamId(teamId) || 'gs-baseball');
+  teamId = cleanTeamId(teamId);
+  if (!teamId) return { skipped: 'no_team' };
+  const db = firestore(pid, tok, teamId);
+  // Only real teams (someone created it) get checked, so a made-up team code can't create documents.
+  if (!(await db.get('config/setup'))) return { skipped: 'no_team' };
   const cur = await db.get('config/notify');
   const state = cur && cur.state ? JSON.parse(cur.state) : {};
   const before = JSON.stringify(state);
@@ -509,9 +556,9 @@ async function notifyRun(env, self, site, teamId) {
     const prev = state.games[g._id];
     state.games[g._id] = { a: sum.a, h: sum.h, i: sum.i, half: sum.half };
     if (first) continue;
-    const L = line(g, sum), link = site + '/?team=' + encodeURIComponent(cleanTeamId(teamId) || 'gs-baseball') + '#live', tag = 'game-' + g._id;
+    const L = line(g, sum), link = site + '/?team=' + encodeURIComponent(teamId) + '#live', tag = 'game-' + g._id;
     const where = (sum.half ? 'Bottom ' : 'Top ') + ORDN(sum.i);
-    if (!prev) { out.push({ kind: 'score', level: 'runs', title: teamName + (g.home ? ' vs ' : ' at ') + (g.opponent || 'Opponent') + ' is underway', body: 'Follow it live in The Hub.', tag, link }); continue; }
+    if (!prev) { out.push({ kind: 'score', level: 'runs', title: teamName + (g.home ? ' vs ' : ' at ') + (g.opponent || 'Opponent') + ' is underway', body: 'Follow it live in ' + (env.APP_NAME || 'The Hub') + '.', tag, link }); continue; }
     const runs = prev.a !== sum.a || prev.h !== sum.h;
     const turned = prev.i !== sum.i || prev.half !== sum.half;
     if (runs) out.push({ kind: 'score', level: 'runs', title: 'Run scores! ' + L.text, body: turned ? (sum.half ? 'Middle of the ' + ORDN(sum.i) : 'End of the ' + ORDN(sum.i - 1)) : where + ', ' + (sum.o || 0) + ' out' + (sum.o === 1 ? '' : 's'), tag, link });
@@ -523,7 +570,7 @@ async function notifyRun(env, self, site, teamId) {
     const g = await db.get('games/' + gid);
     if (!first && g && g.status === 'final' && g.sum) {
       const L = line(g, g.sum);
-      out.push({ kind: 'score', level: 'runs', title: 'Final: ' + L.text, body: L.us > L.them ? teamName + ' win!' : L.us < L.them ? teamName + ' lose. On to the next one.' : 'It ends in a tie.', tag: 'game-' + gid, link: site + '/?team=' + encodeURIComponent(cleanTeamId(teamId) || 'gs-baseball') + '#games' });
+      out.push({ kind: 'score', level: 'runs', title: 'Final: ' + L.text, body: L.us > L.them ? teamName + ' win!' : L.us < L.them ? teamName + ' lose. On to the next one.' : 'It ends in a tie.', tag: 'game-' + gid, link: site + '/?team=' + encodeURIComponent(teamId) + '#games' });
     }
   }
 
@@ -538,12 +585,12 @@ async function notifyRun(env, self, site, teamId) {
   if (setup && setup.owner) ok.add(setup.owner);
   const muted = new Map(prefs.map((x) => [x._id, x.mute && typeof x.mute === 'object' ? x.mute : {}]));
   const icon = site + '/icons/icon-192.png';
-  const link = site + '/?team=' + encodeURIComponent(cleanTeamId(teamId) || 'gs-baseball') + '#chat';
+  const link = site + '/?team=' + encodeURIComponent(teamId) + '#chat';
   const say = (m, n) => (m.photo ? '📷 Photo' + (m.text ? ': ' : '') : '') + String(m.text || '').slice(0, n);
   const items = [];
   for (const t of tokens) {
     if (!t.token || !ok.has(t.uid)) continue;
-    for (const a of annNew) if (a.uid !== t.uid) items.push({ id: t._id, token: t.token, title: '📣 ' + (a.name || 'Coach'), body: String(a.text || '').slice(0, 180), tag: 'ann-' + a._id, link: site + '/?team=' + encodeURIComponent(cleanTeamId(teamId) || 'gs-baseball') + '#news', icon });
+    for (const a of annNew) if (a.uid !== t.uid) items.push({ id: t._id, token: t.token, title: '📣 ' + (a.name || 'Coach'), body: String(a.text || '').slice(0, 180), tag: 'ann-' + a._id, link: site + '/?team=' + encodeURIComponent(teamId) + '#news', icon });
     if (chatNew.length && t.chat !== false) {
       const mute = muted.get(t.uid) || {};
       const see = chatNew.filter((m) => m.uid !== t.uid && !mute[m.uid]);
