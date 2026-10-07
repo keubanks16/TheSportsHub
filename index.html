@@ -124,6 +124,17 @@ button { cursor: pointer; }
 .logo-pick { display: flex; align-items: center; gap: 12px; }
 .logo-pick .lp-img { width: 64px; height: 64px; border-radius: 12px; background: var(--navy); display: grid; place-items: center; overflow: hidden; flex: none; }
 .logo-pick .lp-img img { width: 100%; height: 100%; object-fit: contain; }
+/* Practice attendance */
+.att-card { padding: 4px 14px 12px; }
+.att-row { padding: 11px 0; border-bottom: 1px solid var(--line); }
+.att-card .more-row { margin: 0 -14px; }
+.att-dots { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 3px; }
+.att-dot { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line); vertical-align: -2px; }
+.att-dot.in { background: #39B86B; border-color: #39B86B; }
+.att-dot.out { background: #D9534F; border-color: #D9534F; }
+.att-pct { font-family: var(--font-display); font-size: 20px; }
+.att-team { margin-top: 12px; }
+.att-mark { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
 /* Plans */
 .promo-gif { width: 100%; border-radius: var(--radius); display: block; border: 1px solid var(--line); background: #000; aspect-ratio: 16 / 9; object-fit: cover; }
 .promo-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 15px; }
@@ -3540,12 +3551,53 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
     return h;
   }
 
+  // ----- practices & attendance -----
+  // Each practice keeps attendance as { playerId: 'present' | 'absent' }. Coaches mark it; coaches see
+  // everyone's record, a family sees their own player's record and the team's overall rate.
+  const ATT = ['present', 'absent'];
+  function attCount(p) { const a = (p && p.attendance) || {}; const m = Object.keys(a).filter((k) => ATT.includes(a[k])); return { marked: m.length, present: m.filter((k) => a[k] === 'present').length }; }
+  function attendanceHTML(list) {
+    const done = list.filter((p) => attCount(p).marked).sort((x, y) => String(x.date || '').localeCompare(String(y.date || '')));
+    if (!done.length) return '';
+    const can = Access.isAdmin, mine = myPlayers();
+    let tp = 0, tm = 0;
+    const rows = sortedRoster().map((pl) => {
+      let present = 0, marked = 0, dots = '';
+      for (const pr of done) {
+        const v = (pr.attendance || {})[pl.id];
+        const when = pr.date ? parseDate(pr.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+        if (v === 'present') { present++; marked++; dots += `<i class="att-dot in" title="${esc(when)}: present"></i>`; }
+        else if (v === 'absent') { marked++; dots += `<i class="att-dot out" title="${esc(when)}: absent"></i>`; }
+        else dots += `<i class="att-dot" title="${esc(when)}: not marked"></i>`;
+      }
+      tp += present; tm += marked;
+      return { pl, present, marked, dots };
+    });
+    const teamPct = tm ? Math.round((tp / tm) * 100) + '%' : '—';
+    const row = (r) => `<div class="att-row"><div class="row" style="margin:0;flex-wrap:nowrap"><div class="grow" style="min-width:0"><b>${r.pl.num ? '#' + esc(r.pl.num) + ' ' : ''}${esc(r.pl.name)}</b><div class="small muted">${r.present} of ${r.marked} practice${r.marked === 1 ? '' : 's'}</div></div><b class="att-pct">${r.marked ? Math.round((r.present / r.marked) * 100) + '%' : '—'}</b></div><div class="att-dots">${r.dots}</div></div>`;
+    const shown = can ? rows : rows.filter((r) => mine.includes(r.pl.id));
+    let h = `<h2 class="sec" id="sec-attendance"><span class="sec-l">Practice attendance<span class="cnt">${done.length} practice${done.length === 1 ? '' : 's'}</span></span></h2><div class="card att-card">`;
+    h += shown.length ? expandList('attendance', shown, row, 6) : '';
+    h += `<div class="row att-team"><div class="grow"><b>Team attendance</b><div class="small muted"><i class="att-dot in"></i> present <i class="att-dot out"></i> absent <i class="att-dot"></i> not marked</div></div><b class="att-pct">${teamPct}</b></div></div>`;
+    return h;
+  }
   function renderPractices() {
-    const can=Access.isAdmin, list=Object.values(Data.practices||{}).sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
-    let h=`<div class="row"><div class="grow"><h2 class="sec" style="margin:0">Practice Schedule</h2><div class="small muted">Dates, times, locations and team notes.</div></div>${can?'<button class="btn primary" data-act="practiceAdd">+ Add</button>':''}</div><div class="row" style="margin-top:10px"><button class="btn grow" data-act="extraWork">⚾ 30-Minute Extra Work</button></div>`;
-    if(!list.length)return h+`<div class="card empty" style="margin-top:14px"><h3>No practices scheduled</h3><p>${can?'Tap Add to schedule the first practice.':'Your coach has not posted a practice yet.'}</p></div>`;
-    h+='<div style="display:grid;gap:10px;margin-top:14px">';
-    for(const p of list){const d=p.date?parseDate(p.date):null,date=d&&!isNaN(d)?d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}):(p.date||'Date TBD');h+=`<section class="card"><div class="row"><div class="grow"><h3 style="margin:0 0 5px">${esc(date)}</h3><div><b>${esc(p.time||'Time TBD')}</b>${p.endTime?' – '+esc(p.endTime):''}</div>${p.location?`<div class="muted" style="margin-top:5px">📍 ${esc(p.location)}</div>`:''}${p.notes?`<p style="margin:10px 0 0">${esc(p.notes)}</p>`:''}</div>${can?`<button class="btn sm" data-act="practiceEdit" data-id="${esc(p.id)}">Edit</button>`:''}</div></section>`}return h+'</div>';
+    const can = Access.isAdmin, today = todayISO();
+    const list = Object.values(Data.practices || {}).sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+    const upcoming = list.filter((p) => !p.date || String(p.date) >= today), past = list.filter((p) => p.date && String(p.date) < today).reverse();
+    let h = `<div class="row"><div class="grow"><h2 class="sec" style="margin:0">Practice Schedule</h2><div class="small muted">Dates, times, locations, team notes and attendance.</div></div>${can ? '<button class="btn primary" data-act="practiceAdd">+ Add</button>' : ''}</div><div class="row" style="margin-top:10px"><button class="btn grow" data-act="extraWork">⚾ 30-Minute Extra Work</button></div>`;
+    if (!list.length) return h + `<div class="card empty" style="margin-top:14px"><h3>No practices scheduled</h3><p>${can ? 'Tap Add to schedule the first practice.' : 'Your coach has not posted a practice yet.'}</p></div>`;
+    const card = (p) => {
+      const d = p.date ? parseDate(p.date) : null, date = d && !isNaN(d) ? d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) : (p.date || 'Date TBD');
+      const c = attCount(p), mineV = myPlayers().map((id) => (p.attendance || {})[id]).filter(Boolean);
+      const att = can && c.marked ? `<div class="small" style="margin-top:6px">Attendance: <b>${c.present}/${c.marked} present</b></div>` : !can && mineV.length ? `<div class="small" style="margin-top:6px">${mineV.map((v) => (v === 'present' ? '✅ Present' : '❌ Absent')).join(' · ')}</div>` : '';
+      const btns = can ? `<div class="stack" style="gap:6px"><button class="btn sm${p.date && String(p.date) <= today && !c.marked ? ' primary' : ''}" data-act="practiceAttendance" data-id="${esc(p.id)}">Attendance</button><button class="btn sm" data-act="practiceEdit" data-id="${esc(p.id)}">Edit</button></div>` : '';
+      return `<section class="card" style="padding:14px"><div class="row" style="align-items:flex-start;flex-wrap:nowrap"><div class="grow" style="min-width:0"><h3 style="margin:0 0 5px">${esc(date)}</h3><div><b>${esc(p.time || 'Time TBD')}</b>${p.endTime ? ' – ' + esc(p.endTime) : ''}</div>${p.location ? `<div class="muted" style="margin-top:5px">📍 ${esc(p.location)}</div>` : ''}${p.notes ? `<p style="margin:10px 0 0">${esc(p.notes)}</p>` : ''}${att}</div>${btns}</div></section>`;
+    };
+    if (upcoming.length) h += `<h2 class="sec">Upcoming</h2><div style="display:grid;gap:10px">${upcoming.map(card).join('')}</div>`;
+    h += attendanceHTML(list);
+    if (past.length) h += `<h2 class="sec">Past practices</h2><div style="display:grid;gap:10px">${past.map(card).join('')}</div>`;
+    return h;
   }
 
   function renderGames() {
@@ -4385,6 +4437,15 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
         <label><span class="field-lbl">Parent initials</span>${inp('parent',sh.parent||'','placeholder="Required" maxlength="20" autocomplete="off"')}</label>
         ${sh.err?`<div class="warn-text">${esc(sh.err)}</div>`:''}
         <button class="btn primary grow" data-act="extraSave">Confirm 30-Minute Session</button>`;
+    },
+    practiceAttendance(sh) {
+      const p = Data.practices[sh.id], a = sh.attendance || {}, roster = sortedRoster();
+      const d = p && p.date ? parseDate(p.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+      const n = roster.filter((x) => a[x.id] === 'present').length, m = roster.filter((x) => ATT.includes(a[x.id])).length;
+      return head('Practice attendance') + `<div class="small muted" style="margin-top:-8px">${esc([d, p && p.time].filter(Boolean).join(' · '))}${m ? ' · ' + n + ' of ' + m + ' present' : ''}</div>
+        ${roster.length ? `<div class="row" style="gap:8px"><button class="btn sm" data-act="attendanceAll" data-v="present">Everyone present</button><button class="btn sm ghost" data-act="attendanceAll" data-v="">Clear</button></div>
+        <div>${roster.map((x) => `<div class="att-mark"><div class="grow" style="min-width:0"><b>${x.num ? '#' + esc(x.num) + ' ' : ''}${esc(x.name)}</b></div><div class="seg"><button data-act="attendanceMark" data-id="${esc(x.id)}" data-v="present" aria-pressed="${a[x.id] === 'present'}">Present</button><button data-act="attendanceMark" data-id="${esc(x.id)}" data-v="absent" aria-pressed="${a[x.id] === 'absent'}">Absent</button></div></div>`).join('')}</div>` : '<p class="muted">Add players to the roster first (Team tab).</p>'}
+        <div class="row"><button class="btn primary" data-act="attendanceSave">Save attendance</button><button class="btn" data-act="close">Cancel</button></div>`;
     },
     practice(sh) {
       return head(sh.id?'Edit practice':'Add practice')+`
@@ -6908,7 +6969,17 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
     },
     practiceAdd() { if(!Access.isAdmin)return; openSheet({type:'practice',id:'',f:{date:new Date().toISOString().slice(0,10),time:'6:00 PM',endTime:'',location:'',notes:''}}); },
     practiceEdit(d) { if(!Access.isAdmin)return; const p=Data.practices[d.id]; if(p)openSheet({type:'practice',id:p.id,f:{date:p.date||'',time:p.time||'',endTime:p.endTime||'',location:p.location||'',notes:p.notes||''}}); },
-    practiceSave() { const sh=UI.sheet;if(!Access.isAdmin||!sh||sh.type!=='practice')return; if(!sh.f.date){sh.err='Choose a date.';return renderSheet()} const id=sh.id||uid('p'),p={id,...sh.f,updatedAt:Date.now()};Data.practices[id]=p;Saver.put('practices/'+id,p);closeSheet();render(); },
+    practiceSave() { const sh=UI.sheet;if(!Access.isAdmin||!sh||sh.type!=='practice')return; if(!sh.f.date){sh.err='Choose a date.';return renderSheet()} const id=sh.id||uid('p'),p=Object.assign({},Data.practices[id]||{},sh.f,{id,updatedAt:Date.now()});Data.practices[id]=p;Saver.put('practices/'+id,p);closeSheet();render(); },
+    practiceAttendance(d) { if (!Access.isAdmin) return; const p = Data.practices[d.id]; if (p) openSheet({ type: 'practiceAttendance', id: p.id, attendance: Object.assign({}, p.attendance || {}) }); },
+    attendanceMark(d) { const sh = UI.sheet; if (!sh || sh.type !== 'practiceAttendance') return; sh.attendance[d.id] = sh.attendance[d.id] === d.v ? '' : d.v; renderSheet(); },
+    attendanceAll(d) { const sh = UI.sheet; if (!sh || sh.type !== 'practiceAttendance') return; for (const x of sortedRoster()) sh.attendance[x.id] = d.v; renderSheet(); },
+    attendanceSave() {
+      const sh = UI.sheet; if (!Access.isAdmin || !sh || sh.type !== 'practiceAttendance') return;
+      const p = Data.practices[sh.id]; if (!p) return closeSheet();
+      const a = {}; for (const k in sh.attendance) if (ATT.includes(sh.attendance[k])) a[k] = sh.attendance[k];
+      p.attendance = a; p.updatedAt = Date.now();
+      Saver.put('practices/' + p.id, p); closeSheet(); render(); toast('Attendance saved');
+    },
     practiceDelete(d) { if(!Access.isAdmin||!d.id||!confirm('Delete this practice?'))return;delete Data.practices[d.id];removePath('practices/'+d.id,'practice');closeSheet();render(); },
     async camOpen() {
       if (!has('liveVideo')) return planGate('liveVideo');
