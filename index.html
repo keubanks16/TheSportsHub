@@ -819,6 +819,7 @@ body.viewer-on { overflow: hidden; }
 .toast { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--ground); padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 15px; z-index: 50; max-width: calc(100% - 32px); box-shadow: var(--shadow); }
 .loading { padding: 60px 0; text-align: center; color: var(--ink-2); display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .loading img { height: 60px; width: auto; animation: pulse 1.4s infinite; }
+.loading img.wordmark { height: auto; width: min(340px, 86%); border-radius: 14px; }
 .over-banner { background: var(--accent-soft); border-radius: var(--radius); padding: 12px 14px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .over-banner .grow { min-width: 180px; font-weight: 600; }
 
@@ -842,7 +843,7 @@ body.viewer-on { overflow: hidden; }
 </div></header>
 
 <div id="video-dock" class="video-dock" hidden></div>
-<main id="view"><div class="loading"><div>Loading your team…</div></div></main>
+<main id="view"><div class="loading"><img class="wordmark" src="media/the-sports-hub-wordmark.jpg" alt="The Sports Hub"><div>Loading your team…</div></div></main>
 
 <nav class="tabs" aria-label="Sections"><div class="tabs-in" id="tabs">
   <button data-act="tab" data-tab="games"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Games</button>
