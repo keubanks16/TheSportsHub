@@ -37,9 +37,9 @@ Your app → **Monetization → Subscriptions**:
 | Reference name | Product ID | Duration | Price |
 | --- | --- | --- | --- |
 | Elite Yearly | `com.kollinmeubanks.thesportshub.elite.yearly` | 1 year | $300 |
-| Elite Monthly | `com.kollinmeubanks.thesportshub.elite.monthly` | 1 month | $35 |
-| Pro Yearly | `com.kollinmeubanks.thesportshub.pro.yearly` | 1 year | $120 |
-| Pro Monthly | `com.kollinmeubanks.thesportshub.pro.monthly` | 1 month | $15 |
+| Elite Monthly | `com.kollinmeubanks.thesportshub.elite.monthly` | 1 month | $34.99 |
+| Pro Yearly | `com.kollinmeubanks.thesportshub.pro.yearly` | 1 year | $119.99 |
+| Pro Monthly | `com.kollinmeubanks.thesportshub.pro.monthly` | 1 month | $14.99 |
 
    Apple keeps 15–30% of each sale (15% if you join the App Store Small Business Program, which you should). If you pick other prices, also update `prices` in `HUB_CONFIG` in `index.html` (only the website shows those numbers; the app shows Apple's).
 3. **Order the levels**: drag Elite (both) above Pro (both) in the group so Apple treats Pro → Elite as an upgrade.

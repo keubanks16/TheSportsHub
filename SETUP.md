@@ -62,7 +62,7 @@ Coaches are recognized by their sign-in, so they never need the access code.
 
 Each team has its own plan. New teams start on **Free**; the owner upgrades in the iPhone app from **Team → Plan → See plans**, and pays with Apple in-app purchase. The Worker checks the purchase with Apple and turns the plan on within seconds; Apple tells the Worker about renewals, cancellations and refunds. On the website, owners see the plans and are pointed to the iPhone app.
 
-| | Free | Pro ($15/mo or $120/yr) | Elite ($35/mo or $300/yr) |
+| | Free | Pro ($14.99/mo or $119.99/yr) | Elite ($34.99/mo or $300/yr) |
 | --- | --- | --- | --- |
 | Scoring, box scores, stats, roster, schedule, practices | ✓ | ✓ | ✓ |
 | Team chat and announcements | ✓ (no photos) | ✓ | ✓ |
