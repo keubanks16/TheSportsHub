@@ -21,8 +21,14 @@
 // and under Settings -> Bindings add an R2 bucket with the variable name PHOTOS (chat photos),
 // and under Settings -> Triggers add a Cron Trigger that runs every minute (* * * * *).
 //   ALLOWED_ORIGIN     Text    REQUIRED: your app's address(es), comma separated, e.g. https://app.example.com
-//   REQUIRE_ACTIVE     Text    optional; "1" = AI, live video and photos only for teams whose teams/{id}
-//                              document has active: true (set it in the Firebase console when a team pays)
+//   Paid plans (Free / Pro / Elite, per team) through Stripe:
+//   STRIPE_SECRET_KEY        Secret  Stripe -> Developers -> API keys -> Secret key (sk_live_... or sk_test_...)
+//   STRIPE_WEBHOOK_SECRET    Secret  Stripe -> Developers -> Webhooks -> your endpoint -> Signing secret (whsec_...)
+//   STRIPE_PRICE_PRO_MONTH, STRIPE_PRICE_PRO_YEAR, STRIPE_PRICE_ELITE_MONTH, STRIPE_PRICE_ELITE_YEAR
+//                            Text    the price IDs (price_...) of your four Stripe prices
+//   PLANS                    Text    optional; "off" = every team gets everything (no plans)
+//   COMP_TEAMS               Text    optional; comma-separated team codes that always get Elite (your own teams)
+//   Webhook address to give Stripe: https://<your-worker>/stripe-webhook
 //   TEAM_IDS           Text    optional; teams are found automatically. Only needed for very old teams.
 //   MODEL              Text    optional; defaults to claude-sonnet-5-5
 //   APP_NAME           Text    optional; your app's name in notifications (defaults to The Hub)
@@ -37,6 +43,19 @@ const MAX_IMAGE_B64 = 6000000; // about 4.5 MB per image
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const PHOTO_TASKS = ['photo-urls', 'photo-delete'];
 const PAY_TASKS = ['fee-remind'];
+const BILLING_TASKS = ['billing-checkout', 'billing-portal'];
+// ---------- Plans ----------
+// Which plan each server-side feature needs. The team's plan is teams/{id}.plan, written only here.
+const PLAN_ORDER = ['free', 'pro', 'elite'];
+const NEEDS = { photos: 'pro', notifications: 'pro', fees: 'pro', ai: 'elite', stream: 'elite' };
+function planOf(env, teamId, dir) {
+  if (String(env.PLANS || '').toLowerCase() === 'off') return 'elite';
+  if (String(env.COMP_TEAMS || '').split(',').map(cleanTeamId).includes(cleanTeamId(teamId))) return 'elite';
+  const d = dir || {};
+  if (PLAN_ORDER.includes(d.plan)) return d.plan;
+  return d.active === true ? 'elite' : 'free';
+}
+const allows = (plan, feature) => PLAN_ORDER.indexOf(plan) >= PLAN_ORDER.indexOf(NEEDS[feature] || 'free');
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_PHOTO_BYTES = 6 * 1024 * 1024; // the Hub shrinks photos to about 0.3-1 MB before sending
 const PHOTO_KEY = /^chat\/[a-f0-9]{32}\.jpg$/;
@@ -62,6 +81,8 @@ export default {
       return new Response('{}', { headers: { 'content-type': 'application/json' } });
     }
     const here = new URL(request.url);
+    // Stripe tells us about payments here (signed with STRIPE_WEBHOOK_SECRET; no browser involved).
+    if (request.method === 'POST' && here.pathname === '/stripe-webhook') return stripeWebhook(request, env);
     // Chat photos are shown with plain <img> links, so they're checked by a signature, not a sign-in.
     if (request.method === 'GET' && here.pathname.startsWith('/p/')) return photoServe(here, env);
     const origin = request.headers.get('Origin') || '';
@@ -95,6 +116,7 @@ export default {
     // Team members prove who they are with their Hub sign-in, not the coaches' access code.
     if (PHOTO_TASKS.includes(task)) return photoTask(task, request, body, env, reply, ctx, here.origin, allowed[0]);
     if (PAY_TASKS.includes(task)) return payTask(task, request, body, env, reply, allowed);
+    if (BILLING_TASKS.includes(task)) return billingTask(task, request, body, env, reply, allowed);
     // Coaches (and camera operators, for live video) are recognized by their sign-in for their team.
     // The shared ACCESS_CODE still works for setups that use it.
     const codeOk = !!env.ACCESS_CODE && sameText(request.headers.get('x-gs-code') || '', String(env.ACCESS_CODE));
@@ -105,6 +127,7 @@ export default {
       const role = (u.member && u.member.role) || '';
       const ok = STREAM_TASKS.includes(task) ? (u.admin || role === 'camera') : (u.admin || role === 'scorer');
       if (!ok) return reply(403, { error: 'not_allowed', detail: 'Only coaches can use this.' });
+      if (task !== 'ping' && !allows(u.plan, STREAM_TASKS.includes(task) ? 'stream' : 'ai')) return reply(402, { error: 'inactive', detail: 'This is part of the Elite plan.' });
     }
     if (STREAM_TASKS.includes(task)) return stream(task, body, env, reply);
     if (!Object.prototype.hasOwnProperty.call(CLAUDE_TASKS, task)) return reply(400, { error: 'bad_request', detail: 'Unknown task.' });
@@ -197,6 +220,7 @@ async function photoTask(task, request, body, env, reply, ctx, self, site) {
   try { u = await photoUser(request, env); } catch (e) { return reply(e.status || 500, { error: e.error || 'upstream' }); }
   try {
     if (task === 'photo-send') {
+      if (!allows(u.plan, 'photos')) return reply(402, { error: 'inactive', detail: 'Chat photos are part of the Pro plan.' });
       let form;
       try { form = await request.formData(); } catch (e) { return reply(400, { error: 'bad_request' }); }
       const file = form.get('photo');
@@ -259,12 +283,11 @@ async function hubUser(request, env) {
   const teamId = cleanTeamId(request.headers.get('x-team-id'));
   if (!teamId) throw { status: 400, error: 'no_team' };
   const db = firestore(sa.project_id, await googleToken(sa), teamId);
-  const [member, setup, dir] = await Promise.all([db.get('members/' + uid), db.get('config/setup'), env.REQUIRE_ACTIVE === '1' ? db.get('') : null]);
+  const [member, setup, dir] = await Promise.all([db.get('members/' + uid), db.get('config/setup'), db.get('').catch(() => null)]);
   const owner = !!(setup && setup.owner === uid);
   const approved = !!(member && member.status === 'approved');
   if (!owner && !approved) throw { status: 403, error: 'not_approved' };
-  if (env.REQUIRE_ACTIVE === '1' && !(dir && dir.active === true)) throw { status: 402, error: 'inactive' };
-  return { uid, teamId, db, sa, owner, member: member || {}, admin: owner || (approved && member.role === 'admin'), name: member && member.name };
+  return { uid, teamId, db, sa, owner, member: member || {}, admin: owner || (approved && member.role === 'admin'), name: member && member.name, plan: planOf(env, teamId, dir), dir: dir || {} };
 }
 // Checks a Firebase sign-in token against Google's published keys. Returns the user id, or null.
 let JWKS = null;
@@ -351,6 +374,7 @@ async function payTask(task, request, body, env, reply, allowed) {
   try {
     if (task === 'fee-remind') {
       if (!feeAccess) return reply(403, { error: 'not_allowed' });
+      if (!allows(u.plan, 'fees')) return reply(402, { error: 'inactive' });
       const feeId = String(body.fee || '');
       if (!ID_RE.test(feeId)) return reply(400, { error: 'bad_request' });
       const fee = await u.db.get('fees/' + feeId);
@@ -472,8 +496,109 @@ function firestore(pid, tok, teamId) {
       const r = await fetch(base + '/config/notify?' + pre, { method: 'PATCH', headers: H, body: JSON.stringify({ fields: { state: { stringValue: JSON.stringify(state) } } }) });
       return r.ok;
     },
-    async remove(path) { await fetch(base + '/' + path, { method: 'DELETE', headers: H }).catch(() => {}); }
+    async remove(path) { await fetch(base + '/' + path, { method: 'DELETE', headers: H }).catch(() => {}); },
+    // Sets only the given fields (creates the document if needed). path '' = the team's own card.
+    async patch(path, data) {
+      const mask = Object.keys(data).map((k) => 'updateMask.fieldPaths=' + encodeURIComponent(k)).join('&');
+      const r = await fetch((path ? base + '/' + path : base) + '?' + mask, { method: 'PATCH', headers: H, body: JSON.stringify({ fields: fsEnc(data).mapValue.fields }) });
+      return r.ok;
+    }
   };
+}
+
+// ---------- Paid plans (Stripe) ----------
+async function stripe(env, method, path, params) {
+  const body = params ? new URLSearchParams(params).toString() : undefined;
+  const r = await fetch('https://api.stripe.com/v1/' + path + (method === 'GET' && body ? '?' + body : ''), {
+    method, headers: { Authorization: 'Bearer ' + env.STRIPE_SECRET_KEY, 'content-type': 'application/x-www-form-urlencoded' }, body: method === 'GET' ? undefined : body
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw { status: 502, error: 'stripe', detail: (d.error && d.error.message) || ('Stripe ' + r.status) };
+  return d;
+}
+function priceFor(env, plan, interval) { return env['STRIPE_PRICE_' + plan.toUpperCase() + '_' + (interval === 'month' ? 'MONTH' : 'YEAR')] || ''; }
+function planForPrice(env, price) {
+  for (const pl of ['pro', 'elite']) for (const iv of ['month', 'year']) if (price && priceFor(env, pl, iv) === price) return { plan: pl, interval: iv };
+  return null;
+}
+// Checkout and the billing portal: only the team's owner, signed in.
+async function billingTask(task, request, body, env, reply, allowed) {
+  if (!env.STRIPE_SECRET_KEY) return reply(500, { error: 'billing_not_configured' });
+  let u;
+  try { u = await hubUser(request, env); } catch (e) { return reply(e.status || 500, { error: e.error || 'upstream' }); }
+  if (!u.owner) return reply(403, { error: 'not_owner' });
+  const back = backUrl(body.back, allowed);
+  const withParam = (k, v) => { const x = new URL(back); x.searchParams.set('team', u.teamId); x.searchParams.set(k, v); return x.toString(); };
+  try {
+    const bill = (await u.db.get('config/billing')) || {};
+    if (task === 'billing-portal') {
+      if (!bill.customer) return reply(400, { error: 'no_customer' });
+      const ses = await stripe(env, 'POST', 'billing_portal/sessions', { customer: bill.customer, return_url: withParam('billing', 'portal') });
+      return reply(200, { url: ses.url });
+    }
+    // billing-checkout
+    const plan = body.plan === 'elite' ? 'elite' : body.plan === 'pro' ? 'pro' : '';
+    const price = plan && priceFor(env, plan, body.interval);
+    if (!price) return reply(400, { error: 'billing_not_configured', detail: 'Missing Stripe price for ' + plan + ' ' + body.interval });
+    // A team that already pays changes plans in the billing portal (Stripe prorates it).
+    if (bill.subscription && ['active', 'trialing', 'past_due'].includes(bill.status)) return reply(409, { error: 'has_subscription' });
+    const p = {
+      mode: 'subscription', 'line_items[0][price]': price, 'line_items[0][quantity]': '1',
+      success_url: withParam('billing', 'done'), cancel_url: withParam('billing', 'cancel'),
+      client_reference_id: u.teamId, 'metadata[teamId]': u.teamId,
+      'subscription_data[metadata][teamId]': u.teamId, 'subscription_data[metadata][plan]': plan,
+      allow_promotion_codes: 'true'
+    };
+    if (bill.customer) p.customer = bill.customer;
+    else if (u.member && u.member.email) p.customer_email = String(u.member.email);
+    const ses = await stripe(env, 'POST', 'checkout/sessions', p);
+    return reply(200, { url: ses.url });
+  } catch (e) {
+    return reply(e.status || 502, { error: e.error || 'upstream', detail: e.detail || '' });
+  }
+}
+// Verifies Stripe's signature, then updates the team's plan from the subscription Stripe has now.
+async function stripeWebhook(request, env) {
+  const ok = (status, msg) => new Response(JSON.stringify({ received: status === 200, msg }), { status, headers: { 'content-type': 'application/json' } });
+  if (!env.STRIPE_WEBHOOK_SECRET || !env.STRIPE_SECRET_KEY || !env.FIREBASE_SERVICE_ACCOUNT) return ok(500, 'not configured');
+  const raw = await request.text();
+  const sig = request.headers.get('stripe-signature') || '';
+  const parts = Object.fromEntries(sig.split(',').map((x) => x.split('=')).filter((x) => x.length === 2).map(([k, v]) => [k.trim(), v]));
+  const v1s = sig.split(',').filter((x) => x.trim().startsWith('v1=')).map((x) => x.trim().slice(3));
+  const t = Number(parts.t);
+  if (!t || !v1s.length || Math.abs(Date.now() / 1000 - t) > 300) return ok(400, 'bad signature');
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.STRIPE_WEBHOOK_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(t + '.' + raw)));
+  const hex = Array.from(mac, (b) => b.toString(16).padStart(2, '0')).join('');
+  if (!v1s.some((v) => sameText(v, hex))) return ok(400, 'bad signature');
+  let ev;
+  try { ev = JSON.parse(raw); } catch (e) { return ok(400, 'bad json'); }
+  const obj = (ev.data && ev.data.object) || {};
+  let subId = '', teamId = '';
+  if (ev.type === 'checkout.session.completed') { subId = obj.subscription; teamId = obj.client_reference_id || (obj.metadata && obj.metadata.teamId); }
+  else if (/^customer\.subscription\./.test(ev.type)) { subId = obj.id; teamId = obj.metadata && obj.metadata.teamId; }
+  else return ok(200, 'ignored');
+  teamId = cleanTeamId(teamId);
+  if (!subId || !teamId) return ok(200, 'no team');
+  try {
+    // Always read the subscription fresh, so events arriving out of order can't leave a wrong plan.
+    const sub = await stripe(env, 'GET', 'subscriptions/' + subId);
+    await applySubscription(env, teamId, sub);
+    return ok(200, 'updated');
+  } catch (e) {
+    return ok(500, 'update failed'); // Stripe retries
+  }
+}
+async function applySubscription(env, teamId, sub) {
+  const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
+  const db = firestore(sa.project_id, await googleToken(sa), teamId);
+  const item = (sub.items && sub.items.data && sub.items.data[0]) || {};
+  const found = planForPrice(env, item.price && item.price.id);
+  const live = ['active', 'trialing', 'past_due'].includes(sub.status);
+  const plan = live && found ? found.plan : 'free';
+  const end = Number(item.current_period_end || sub.current_period_end || 0) * 1000;
+  await db.patch('', { plan, planStatus: String(sub.status || ''), planInterval: live && found ? found.interval : '', planRenews: live ? end : 0, planCancels: !!sub.cancel_at_period_end, planUpdatedAt: Date.now() });
+  await db.patch('config/billing', { customer: String(sub.customer || ''), subscription: String(sub.id || ''), status: String(sub.status || ''), plan, updatedAt: Date.now() });
 }
 function eastern(now) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' }).formatToParts(now).map((x) => [x.type, x.value]));
@@ -577,6 +702,8 @@ async function notifyRun(env, self, site, teamId) {
   if (JSON.stringify(state) === before) return { sent: 0 };
   if (!(await db.saveState(state, cur ? cur._updateTime : null))) return { sent: 0, raced: true };
   if (!out.length && !chatNew.length && !annNew.length) return { sent: 0 };
+  // Phone notifications come with Pro; Free teams still get birthday posts, just no pushes.
+  if (!allows(planOf(env, teamId, await db.get('').catch(() => null)), 'notifications')) return { sent: 0, plan: 'free' };
 
   // Who gets what: approved members (or the owner) with the matching setting on, never the sender,
   // and no chat messages from people they muted (prefs/{uid}.mute, a map of muted uid -> name).

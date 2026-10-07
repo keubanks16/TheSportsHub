@@ -124,6 +124,24 @@ button { cursor: pointer; }
 .logo-pick { display: flex; align-items: center; gap: 12px; }
 .logo-pick .lp-img { width: 64px; height: 64px; border-radius: 12px; background: var(--navy); display: grid; place-items: center; overflow: hidden; flex: none; }
 .logo-pick .lp-img img { width: 100%; height: 100%; object-fit: contain; }
+/* Plans */
+.plan-chip { display: inline-flex; align-items: center; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 99px; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; border: 1px solid var(--line); }
+.plan-chip.pro { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.plan-chip.elite { background: linear-gradient(135deg, #F2C94C, #D9A21B); color: #1A1200; border-color: transparent; }
+.upsell { display: flex; align-items: center; gap: 12px; padding: 12px 14px; flex-wrap: wrap; }
+.upsell.big { flex-direction: column; text-align: center; padding: 26px 18px; }
+.upsell.big .grow { flex: none; }
+.plans { display: flex; flex-direction: column; gap: 10px; }
+.plan-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
+.plan-card.cur { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.plan-card.want { border-color: #D9A21B; box-shadow: inset 0 0 0 1px #D9A21B; }
+.plan-card .pc-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.plan-card .pc-name { font-family: var(--font-display); font-size: 22px; }
+.plan-card .pc-price { margin-left: auto; font-weight: 700; font-size: 18px; }
+.plan-card .pc-price small { font-weight: 500; color: var(--ink-2); font-size: 13px; }
+.plan-card ul { margin: 0; padding-left: 20px; font-size: 14px; color: var(--ink-2); }
+.plan-card li { margin: 2px 0; }
+.lock-chip { font-size: 10px; font-weight: 800; letter-spacing: .06em; padding: 2px 6px; border-radius: 99px; background: linear-gradient(135deg, #F2C94C, #D9A21B); color: #1A1200; margin-left: 6px; vertical-align: middle; }
 /* Expandable lists (roster, families, coaches, opponents) */
 .more-row { display: flex; justify-content: center; border-top: 1px solid var(--line); }
 .more-row button { flex: 1; background: transparent; border: 0; padding: 12px; font-weight: 700; color: var(--accent); display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; }
@@ -836,7 +854,10 @@ window.GS_FIREBASE = {"apiKey":"AIzaSyDth-zgyTD4F8kzCyXKgrYWX_0YvwEgGYg","authDo
 // appName: your product's name. workerUrl: your Cloudflare Worker address. When it's set, every
 // team gets chat photos, notifications, roster scanning, scouting reports and live video without
 // any setup of their own (coaches are recognized by their sign-in).
-window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kollinmeubanks.workers.dev' };
+window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kollinmeubanks.workers.dev',
+  // Paid plans. Prices here are only what the app shows; the real prices are your Stripe prices.
+  // billing: false unlocks everything for every team (no plans).
+  billing: true, prices: { pro: { month: 15, year: 120 }, elite: { month: 35, year: 300 } } };
 </script>
 <script>/* The Hub baseball scoring engine: replays a game's event log into game state and stats. */
 (function (root) {
@@ -1340,6 +1361,42 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
     ['#003087', '#E4002B', '#F4F6FA', 'Blue and red, light background'],
     ['#1F6FB2', '#1F6FB2', '#FFFFFF', 'Royal blue, white background']
   ];
+
+  // ---------- Plans: Free, Pro, Elite (one per team) ----------
+  // A team's plan lives on its public card (teams/{id}.plan). Only the Worker sets it, when Stripe
+  // confirms a payment or a cancellation (or the app owner, by hand, in the Firebase console).
+  const PLAN_ORDER = ['free', 'pro', 'elite'];
+  const PRICES = Object.assign({ pro: { month: 15, year: 120 }, elite: { month: 35, year: 300 } }, APP.prices || {});
+  const PLANS = {
+    free: { name: 'Free', tag: 'Score games and keep the team together', feats: ['Pitch-by-pitch scoring and live scores', 'Box scores and season stats', 'Roster, schedule and practices', 'Team chat (no photos) and announcements', 'Instincts and Defense Drills', '1 head coach + 2 assistant coaches'] },
+    pro: { name: 'Pro', tag: 'Make it your team’s own app', feats: ['Everything in Free', 'Unlimited coaches and staff', 'Your logo and team colors', 'Tournament fees with Venmo and Cash App', 'Phone notifications for scores and chat', 'Photos in team chat', 'Watch links for grandparents'] },
+    elite: { name: 'Elite', tag: 'Every tool to scout, coach and stream', feats: ['Everything in Pro', 'Spray charts and opponent scouting', 'AI roster scanning from a photo', 'AI scouting reports', 'Swing AI video breakdown', 'Built-in live video streaming', 'Automatic YouTube uploads'] }
+  };
+  // The plan each feature needs.
+  const FEATURE_PLAN = { coaches: 'pro', branding: 'pro', fees: 'pro', notifications: 'pro', photos: 'pro', watch: 'pro', scouting: 'elite', spray: 'elite', aiRoster: 'elite', aiScout: 'elite', swing: 'elite', liveVideo: 'elite', ytUpload: 'elite' };
+  const FEATURE_NAME = { coaches: 'More than 3 coaches', branding: 'Your logo and team colors', fees: 'Tournament fees', notifications: 'Phone notifications', photos: 'Photos in team chat', watch: 'Watch links', scouting: 'Opponent scouting', spray: 'Spray charts', aiRoster: 'AI roster scanning', aiScout: 'AI scouting reports', swing: 'Swing AI', liveVideo: 'Built-in live video', ytUpload: 'YouTube uploads' };
+  const FREE_COACHES = 3;
+  const BILLING_ON = APP.billing !== false;
+  function teamPlan() {
+    if (!BILLING_ON) return 'elite';
+    const d = Dir.d || {};
+    if (PLAN_ORDER.includes(d.plan)) return d.plan;
+    return d.active === true ? 'elite' : 'free';
+  }
+  const planRank = (pl) => PLAN_ORDER.indexOf(pl);
+  function has(f) { return planRank(teamPlan()) >= planRank(FEATURE_PLAN[f] || 'free'); }
+  // A locked feature: the owner gets the plans screen, everyone else a short note.
+  function planGate(f) {
+    const need = PLANS[FEATURE_PLAN[f]] ? PLANS[FEATURE_PLAN[f]].name : 'a paid';
+    if (Access.isOwner) { A.planOpen({ plan: FEATURE_PLAN[f], f }); return; }
+    toast(FEATURE_NAME[f] + ' is part of the ' + need + ' plan. Ask your team’s owner to upgrade.');
+  }
+  function upsellHTML(f, opts) {
+    const o = opts || {}, need = FEATURE_PLAN[f], pl = PLANS[need];
+    const msg = o.msg || (FEATURE_NAME[f] + (Access.isOwner ? ' comes with ' : ' is part of ') + pl.name + '.');
+    const act = Access.isOwner ? `<button class="btn sm primary" data-act="planOpen" data-plan="${need}" data-f="${f}">See ${pl.name}</button>` : '<span class="small muted">Ask your team’s owner to upgrade.</span>';
+    return `<div class="card upsell${o.big ? ' big' : ''}"><span class="plan-chip ${need}">${pl.name}</span><div class="grow"><b>${esc(o.title || FEATURE_NAME[f])}</b><div class="small muted">${esc(msg)}</div></div>${act}</div>`;
+  }
   const safeLogo = (u) => (/^https:\/\/[^\s"'<>]+$/i.test(String(u || '')) ? String(u) : '');
   // The team's public card (teams/{id}): name, logo and colors. Anyone can read it, so the sign-in
   // screen already shows the team's brand before someone signs in.
@@ -1347,7 +1404,8 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
   function brandOf() { return Data.loaded.team && Data.team ? Data.team : (Dir.d || {}); }
   function teamTitle() { const b = brandOf(); return String(b.name || (Dir.d && Dir.d.name) || '').trim() || (TEAM_CHOSEN ? TEAM_ID : APP_NAME); }
   function applyTeamBrand(t) {
-    const team = t || {};
+    // Free teams use the app's own look; logo and colors come with Pro.
+    const team = has('branding') ? (t || {}) : { name: (t || {}).name };
     const primary = HEX.test(team.primaryColor || '') ? team.primaryColor : '#0B2753';
     const secondary = HEX.test(team.secondaryColor || '') ? team.secondaryColor : '#6DA0D6';
     const base = HEX.test(team.baseColor || '') ? team.baseColor : '#04122D';
@@ -1622,6 +1680,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
   function inviteDate(t) { return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
   function invitesHTML() {
     if (!canInvite()) return '';
+    if (!has('watch')) return Access.isAdmin ? '<h2 class="sec">Invite family to watch</h2>' + upsellHTML('watch', { msg: 'Send grandparents a link to follow games live, no account needed.' }) : '';
     const me = Access.user.uid;
     let h = `<h2 class="sec">Invite family to watch <button class="btn ghost sm" data-act="inviteNew">+ Invite</button></h2><section class="card stack" style="padding:14px">
       <p style="margin:0">Send grandparents and other family a link to follow games: the live score, every play, the live video and box scores. They don’t need an account, and they can’t see the chat or fees.</p>`;
@@ -1666,7 +1725,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
     if (TEAM_CHOSEN) {
       FB.F.onSnapshot(FB.F.doc(FB.fs, 'teams', TEAM_ID), (s) => {
         Dir.loaded = true; Dir.exists = s.exists(); Dir.d = s.exists() ? s.data() : null;
-        if (!Data.loaded.team) applyTeamBrand(Dir.d || {});
+        applyTeamBrand(Data.loaded.team ? Data.team : (Dir.d || {}));
         dirSync();
         scheduleRender();
       }, () => { Dir.loaded = true; scheduleRender(); });
@@ -1894,7 +1953,8 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
     const memberRow = (m) => { const own = m.uid === X.owner; const chip = own ? 'Owner' : m.status === 'denied' ? 'Declined' : m.role === 'admin' ? 'Coach' : m.role === 'camera' ? 'Camera' : m.role === 'scorer' ? 'Scorer' : 'Family'; return `<button class="player" data-act="member" data-uid="${esc(m.uid)}"><span class="no" style="font-size:14px">${{ Family: 'FAM', Declined: '—', Camera: 'CAM', Scorer: 'SCR', Owner: 'OWN' }[chip] || 'CO'}</span><span style="min-width:0"><span class="nm">${esc(memberLabel(m))}</span><span class="meta">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}${m.role === 'parent' && Array.isArray(m.players) && m.players.length ? ' · ' + esc(m.players.map(playerName).join(', ')) : ''}</span></span><span class="chip">${chip}</span></button>`; };
     const staff = others.filter((m) => m.status !== 'denied' && (m.uid === X.owner || ['admin', 'scorer', 'camera'].includes(m.role)));
     const fams = others.filter((m) => !staff.includes(m));
-    h += `<h2 class="sec" id="sec-coaches"><span class="sec-l">Coaches &amp; staff<span class="cnt">${staff.length}</span></span></h2>`;
+    const coachN = staff.filter((m) => m.uid === X.owner || m.role === 'admin').length;
+    h += `<h2 class="sec" id="sec-coaches"><span class="sec-l">Coaches &amp; staff<span class="cnt">${staff.length}</span></span>${has('coaches') ? '' : `<span class="small muted" style="text-transform:none;letter-spacing:0">${coachN} of ${FREE_COACHES} coaches on Free</span>`}</h2>`;
     h += staff.length ? `<div class="card roster">${expandList('coaches', staff, memberRow)}</div>` : '<div class="card empty" style="padding:16px"><p class="small" style="margin:0">Add another coach: have them join with your team code, approve them below, then tap their name and choose Coach.</p></div>';
     h += `<h2 class="sec" id="sec-families"><span class="sec-l">Families<span class="cnt">${fams.length}</span></span></h2>`;
     h += fams.length ? `<div class="card roster">${expandList('families', fams, memberRow)}</div>` : '<div class="card empty" style="padding:16px"><p class="small" style="margin:0">No families yet. Share your team code or join link (top of this page) and approve them here.</p></div>';
@@ -1975,7 +2035,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
     return out;
   }
   function yourFeesHTML() {
-    if (!feesAllowed() || !myPlayers().length) return '';
+    if (!has('fees') || !feesAllowed() || !myPlayers().length) return '';
     const all = myFees();
     if (!all.length) return '';
     const cfg = Fees.cfg || {};
@@ -2020,6 +2080,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
   const feeBar = (s) => `<div class="fee-bar"><i style="width:${s.n ? (s.paid * 100 / s.n).toFixed(1) : 0}%;background:var(--good)"></i><i style="width:${s.n ? (s.claimed * 100 / s.n).toFixed(1) : 0}%;background:#F2C94C"></i></div>`;
   function feesHTML() {
     if (!feeAccess()) return '';
+    if (!has('fees')) return `<h2 class="sec">Fees</h2>` + upsellHTML('fees', { msg: 'Collect tournament fees with Venmo and Cash App and see who has paid.' });
     const fees = Object.values(Fees.list).sort(feeSort);
     let h = `<h2 class="sec" id="fees">Fees <button class="btn ghost sm" data-act="feeEdit">+ Tournament</button></h2>`;
     if (!Fees.loaded) h += '<div class="card empty" style="padding:18px"><p>Loading fees…</p></div>';
@@ -2490,6 +2551,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
   }
   async function chatPickPhoto(file) {
     if (!chatAllowed() || Chat.sending) return;
+    if (!has('photos')) { planGate('photos'); return; }
     if (!workerUrl()) { toast(photoErrText(0, 'photos_not_configured')); return; }
     chatPhotoClear();
     Chat.pending = { busy: true };
@@ -2736,6 +2798,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
   }
   function pushHTML() {
     if (!(UI.standalone && chatAllowed())) return '';
+    if (!has('notifications')) return Access.isAdmin ? '<h2 class="sec">Notifications</h2>' + upsellHTML('notifications', { msg: 'Scores, final results, announcements and chat on everyone’s phone.' }) : '';
     const stt = pushState();
     const v = pushLocal();
     let body = '';
@@ -2831,6 +2894,13 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
       history.replaceState(null, '', u.pathname + u.search + (u.hash || '#live'));
     }
   } catch (e) { /* storage blocked: the link just won't open */ }
+  // Back from Stripe checkout (?billing=done or ?billing=cancel).
+  let billingReturn = '';
+  try {
+    const u = new URL(location.href); billingReturn = u.searchParams.get('billing') || '';
+    if (billingReturn) { u.searchParams.delete('billing'); history.replaceState(null, '', u.pathname + u.search + (u.hash || '#team')); if (!location.hash) UI.tab = 'team'; }
+  } catch (e) { /* nothing to do */ }
+  if (billingReturn) setTimeout(() => toast(billingReturn === 'done' ? 'Thanks! Your new plan turns on in a few seconds.' : 'Checkout canceled. Nothing was charged.'), 1500);
   const hashTab = (location.hash || '').slice(1);
   if (['games', 'practice', 'live', 'stats', 'scout', 'team', 'chat', 'news', 'photos', 'iq', 'swing'].includes(hashTab)) UI.tab = hashTab;
 
@@ -3294,7 +3364,8 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
   // Opened from a card on the Stats and Instincts tabs (the bottom bar is full), or from #swing.
   // The page itself lives in swing/app.js.
   function swingCardHTML() {
-    return `<button class="card swing-card" data-act="swingOpen"><img src="media/swing-thumb.jpg" alt=""><span><span class="t"><b>Swing AI</b><span class="chip soon">NEW</span></span><span class="d">Analyze a swing from your video, frame by frame.</span></span><span class="fee-go" aria-hidden="true">›</span></button>`;
+    if (!has('swing') && !Access.isAdmin) return '';
+    return `<button class="card swing-card" data-act="swingOpen"><img src="media/swing-thumb.jpg" alt=""><span><span class="t"><b>Swing AI</b>${has('swing') ? '<span class="chip soon">NEW</span>' : '<span class="lock-chip">ELITE</span>'}</span><span class="d">Analyze a swing from your video, frame by frame.</span></span><span class="fee-go" aria-hidden="true">›</span></button>`;
   }
   function renderIQ() {
     const R = UI.iq;
@@ -3365,7 +3436,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
     if (bar) document.documentElement.style.setProperty('--bar-h', bar.offsetHeight + 'px');
     const chatOn = UI.tab === 'chat' && chatAllowed();
     $('#chat-bar').hidden = !chatOn;
-    $('#chat-pic').hidden = !(chatOn && workerUrl());
+    $('#chat-pic').hidden = !(chatOn && workerUrl() && has('photos'));
     document.body.classList.toggle('chat-on', chatOn);
     const nearBottom = chatOn && (Chat.forceBottom || window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 140);
     const v = $('#view');
@@ -3373,6 +3444,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
     document.body.classList.toggle('gated', gated);
     if (gated) { $('#chat-bar').hidden = true; v.innerHTML = renderGate(); renderDock(); return; }
     if (!UI.ready) { v.innerHTML = `<div class="loading"><img src="${LOGO}" alt=""><div>Loading your team…</div></div>`; return; }
+    if (UI.tab === 'swing' && !has('swing') && Dir.loaded) UI.tab = UI.swingFrom || 'stats';
     if (UI.tab === 'swing') {
       try { renderSwingPage(v); } catch (err) { console.error(err); }
       try { renderDock(); } catch (err) { console.error(err); }
@@ -3601,7 +3673,8 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
       h += `<div class="card empty"><h3>${esc(g.home ? 'vs ' : '@ ')}${esc(g.opponent)}</h3><p>${esc(longDate(g.date))}${g.time ? ' at ' + esc(fmtTime(g.time)) : ''}. Set both lineups, then score the game from the Live tab.</p></div>`;
       return h;
     }
-    const tabs = [['box', 'Box score'], ['plays', 'Plays'], ['spray', 'Spray chart']];
+    const tabs = [['box', 'Box score'], ['plays', 'Plays']].concat(has('spray') ? [['spray', 'Spray chart']] : []);
+    if (UI.gameTab === 'spray' && !has('spray')) UI.gameTab = 'box';
     h += `<div><div class="seg" role="group">${tabs.map(([k, l]) => `<button data-act="gameTab" data-k="${k}" aria-pressed="${UI.gameTab === k}">${l}</button>`).join('')}</div></div>`;
     const names = sideNames(g);
     if (UI.gameTab === 'plays') h += `<div class="card" style="padding:4px 14px 12px">${renderPlays(g, s)}</div>`;
@@ -3796,11 +3869,11 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
         <button class="btn sm" data-act="pitcher">Pitcher</button>
         <button class="btn sm" data-act="sub">Sub</button>
         ${gameVideo(g) && UI.standalone ? `<button class="btn sm" data-act="coachVideo">${videoPrefs().coachShow ? 'Hide video' : 'Show video'}</button>` : ''}
-        ${UI.standalone && Backend.kind === 'fb' ? `<button class="btn sm" data-act="camOpen">${Data.stream && Data.stream.live && Data.stream.gid === g.id ? 'Camera (live)' : 'Stream video'}</button>` : ''}
+        ${UI.standalone && Backend.kind === 'fb' && (has('liveVideo') || Access.isOwner) ? `<button class="btn sm" data-act="camOpen">${Data.stream && Data.stream.live && Data.stream.gid === g.id ? 'Camera (live)' : 'Stream video'}</button>` : ''}
       </div>`;
     } else {
       h += `<div class="follow-note card" style="padding:12px 14px"><span class="pill" data-s="follow" style="background:var(--accent-soft);color:var(--ink)">Live</span><span class="grow">Updates as the scorer records each pitch.</span>${canInvite() ? '<button class="btn sm" data-act="inviteNew">Invite family</button>' : ''}</div>`;
-      if (Access.isCamera && UI.standalone && Backend.kind === 'fb') h += `<button class="btn primary block" data-act="camOpen">${Data.stream && Data.stream.live && Data.stream.gid === g.id ? 'Camera (live)' : 'Stream video'}</button>`;
+      if (Access.isCamera && has('liveVideo') && UI.standalone && Backend.kind === 'fb') h += `<button class="btn primary block" data-act="camOpen">${Data.stream && Data.stream.live && Data.stream.gid === g.id ? 'Camera (live)' : 'Stream video'}</button>`;
     }
     const groups = playItems(g, s);
     const recent = [];
@@ -3877,6 +3950,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
   // Our team's spray charts on the Stats tab: the whole team or one hitter, from scored games
   // and any imported chart, laid out like the Scout tab.
   function teamSprayHTML() {
+    if (!has('spray')) return canManage() ? '<h2 class="sec">Spray charts</h2>' + upsellHTML('spray', { msg: 'See where every hitter puts the ball, from every game you score.' }) : '';
     const by = teamSpray();
     const list = [...by.values()].filter((x) => x.pas.length).sort((a, b) => b.pas.length - a.pas.length || (parseInt(a.num, 10) || 999) - (parseInt(b.num, 10) || 999));
     const canImport = canManage() && !!Caps.sample;
@@ -4057,6 +4131,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
     return b;
   }
   function renderScout() {
+    if (!has('scouting')) return upsellHTML('scouting', { big: true, title: 'Scout every opponent', msg: 'Spray charts for every hitter you face, where to position your defense, imported spray charts and AI scouting reports.' + (Access.isOwner ? ' Part of Elite.' : '') });
     const opps = scoutData();
     const canImport = canManage() && !!Caps.sample;
     if (!opps.size) return `<div class="card empty"><img src="${LOGO}" alt=""><h3>Scouting fills in as you score</h3><p>Every ball in play you chart for an opponent hitter lands here, with spray charts, tendencies and where to position your defense.${canImport ? ' Have a spray chart from another app? Import it to start.' : ''}</p>${canImport ? `<button class="btn primary" data-act="sprayOpen">${CAMERA}<span>Import a spray chart</span></button>` : ''}</div>`;
@@ -4097,7 +4172,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
     return h;
   }
   function aiBlock(sel, O, pas, t) {
-    if (!Caps.sample || !pas.length) return '';
+    if (!has('aiScout') || !Caps.sample || !pas.length) return '';
     const key = O.key + '|' + (sel ? sel.key : '*');
     const st2 = UI.ai[key] || {};
     let h = '<div class="stack">';
@@ -4118,6 +4193,26 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
       + `<div class="more-row"><button data-act="expandToggle" data-key="${esc(key)}" aria-expanded="${open}">${open ? 'Show less' : 'Show all ' + n}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></div>`;
   }
 
+  // ----- plan & billing (Team tab) -----
+  const fmtUSD = (n) => '$' + (Number(n) % 1 ? Number(n).toFixed(2) : String(Number(n)));
+  function planStatusLine() {
+    const d = Dir.d || {}, pl = teamPlan();
+    if (pl === 'free') return 'Free plan. Upgrade any time for branding, notifications, scouting and more.';
+    const when = d.planRenews ? new Date(d.planRenews).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    if (d.planStatus === 'past_due') return 'Payment didn’t go through. Update the card in Manage billing to keep ' + PLANS[pl].name + '.';
+    if (d.planCancels && when) return PLANS[pl].name + ' until ' + when + ', then Free.';
+    return PLANS[pl].name + (d.planInterval ? ', billed ' + (d.planInterval === 'year' ? 'yearly' : 'monthly') : '') + (when ? '. Renews ' + when + '.' : '.');
+  }
+  function planCardHTML() {
+    if (!BILLING_ON || Backend.kind !== 'fb' || !Access.isAdmin || !TEAM_CHOSEN) return '';
+    const pl = teamPlan(), d = Dir.d || {};
+    const btns = Access.isOwner
+      ? (pl !== 'elite' ? `<button class="btn sm primary" data-act="planOpen" data-plan="${pl === 'free' ? 'pro' : 'elite'}">${pl === 'free' ? 'See plans' : 'Upgrade to Elite'}</button>` : '<button class="btn sm" data-act="planOpen">Compare plans</button>')
+        + (d.planInterval ? '<button class="btn sm" data-act="planManage">Manage billing</button>' : '')
+      : '<span class="small muted">Only the team’s owner can change the plan.</span>';
+    return `<section class="card stack" style="padding:14px"><div class="row"><div class="grow"><b>Plan</b> <span class="plan-chip ${pl}">${PLANS[pl].name}</span><div class="small muted" style="margin-top:4px">${esc(planStatusLine())}</div></div></div><div class="row" style="gap:8px">${btns}</div></section>`;
+  }
+
   // ----- team -----
   function renderTeam() {
     const t = Data.team;
@@ -4126,6 +4221,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
     let h = sampleBanner() + yourFeesHTML();
     h += `<section class="card brand-card"><div class="logo-tile"><img src="${esc(LOGO)}" alt="Team logo"></div><div class="stack" style="gap:4px;min-width:0"><h3>${esc(t.name)}</h3><span class="muted small">${t.players.length} player${t.players.length === 1 ? '' : 's'} · ${t.innings}-inning games · ${t.pitchLimit ? t.pitchLimit + '-pitch limit' : 'no pitch limit'}</span>${canManage() ? '<div class="row" style="gap:8px"><button class="btn sm" data-act="teamEdit">Team settings &amp; branding</button></div>' : ''}</div></section>`;
     if (Backend.kind === 'fb' && Access.isAdmin && TEAM_CHOSEN) h += `<section class="card stack" style="padding:14px"><div class="row"><div class="grow"><b>Team code</b><div class="small muted">Families and coaches tap Join a team and type this code, or open the join link. You approve each one.</div></div></div><div class="code-box"><span class="grow">${esc(TEAM_ID)}</span><button class="btn sm" data-act="teamCodeCopy">Copy code</button></div><div class="row"><button class="btn sm primary" data-act="teamLinkShare">Share join link</button></div></section>`;
+    h += planCardHTML();
     h += feesHTML();
     const roster = sortedRoster();
     const playerRow = (p) => `<button class="player" data-act="${canManage() ? 'player' : 'playerCard'}" data-id="${esc(p.id)}"><span class="no">${esc(p.num || '–')}</span><span style="min-width:0"><span class="nm">${esc(p.name)}</span> ${p.sample ? '<span class="chip sample">Sample</span>' : ''}<span class="meta">${esc(p.pos || 'Position not set')} · B/T ${esc(p.bats || '?')}/${esc(p.throws || '?')}${canManage() && bdayOk(Bday.dates[p.id]) ? ' · 🎂 ' + esc(bdayShort(Bday.dates[p.id])) : ''}</span></span><span class="meta">${canManage() ? 'Edit' : ''}</span></button>`;
@@ -4146,9 +4242,11 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
     }
     if (UI.standalone && canManage()) {
       const c = loadAiCfg();
+      const ownWorker = !String(APP.workerUrl || '').trim();
       const shared = Backend.kind === 'fb';
-      h += `<h2 class="sec">Cloudflare Worker</h2><section class="card stack" style="padding:14px"><p style="margin:0">${c ? (shared ? 'Connected for every coach and camera operator. Roster photo scanning, scouting reports and live video are on.' : 'Connected on this phone. Roster photo scanning, scouting reports and live video are on.') : 'Not set up. Connect your Worker to scan roster photos, get scouting reports and stream games.'}</p><div><button class="btn${c ? '' : ' primary'}" data-act="aiSetup">${c ? 'Change connection' : 'Set up'}</button></div></section>`;
-      if (shared) {
+      if (ownWorker) h += `<h2 class="sec">Cloudflare Worker</h2><section class="card stack" style="padding:14px"><p style="margin:0">${c ? (shared ? 'Connected for every coach and camera operator. Roster photo scanning, scouting reports and live video are on.' : 'Connected on this phone. Roster photo scanning, scouting reports and live video are on.') : 'Not set up. Connect your Worker to scan roster photos, get scouting reports and stream games.'}</p><div><button class="btn${c ? '' : ' primary'}" data-act="aiSetup">${c ? 'Change connection' : 'Set up'}</button></div></section>`;
+      if (shared && !has('ytUpload')) h += '<h2 class="sec">YouTube uploads</h2>' + upsellHTML('ytUpload', { msg: 'Game videos from the built-in camera upload to your YouTube channel by themselves.' });
+      else if (shared) {
         const y = ytCfg();
         h += `<h2 class="sec">YouTube uploads</h2><section class="card stack" style="padding:14px"><p style="margin:0">${y ? `On. ${y.auto !== false ? 'Game videos upload to YouTube when a stream ends.' : 'Upload game videos from the camera phone with Upload to YouTube.'} ${y.attach ? 'Replays are added to the game page.' : 'Replays aren\u2019t added to game pages yet.'}` : 'Not set up. Upload game videos to your YouTube channel straight from the camera phone.'}</p><div><button class="btn${y ? '' : ' primary'}" data-act="ytSetup">${y ? 'Change' : 'Set up'}</button></div></section>`;
       }
@@ -4567,6 +4665,24 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
         ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
         <div class="row"><button class="btn primary" data-act="ytSave">Save</button>${Data.team.yt ? '<button class="btn danger" data-act="ytClear">Turn off</button>' : '<button class="btn" data-act="close">Cancel</button>'}</div>`;
     },
+    plans(sh) {
+      const cur = teamPlan(), yr = sh.interval === 'year';
+      const tog = segB('planInterval', yr ? 'year' : 'month', [['month', 'Monthly'], ['year', 'Yearly (save)']]);
+      const card = (k) => {
+        const pl = PLANS[k], price = PRICES[k];
+        const amt = k === 'free' ? '<span class="pc-price">$0</span>' : `<span class="pc-price">${fmtUSD(yr ? price.year : price.month)}<small>/${yr ? 'year' : 'month'}</small></span>`;
+        const save = k !== 'free' && yr && price.month ? `<div class="small" style="color:var(--good);font-weight:700">${Math.round(100 - (price.year / (price.month * 12)) * 100)}% less than monthly</div>` : '';
+        let btn = '';
+        if (k === cur) btn = '<span class="small muted">Your current plan</span>';
+        else if (Access.isOwner && k !== 'free') btn = `<button class="btn primary" data-act="planBuy" data-plan="${k}" ${sh.busy ? 'disabled' : ''}>${sh.busy === k ? 'Opening checkout…' : planRank(k) > planRank(cur) ? 'Upgrade to ' + pl.name : 'Switch to ' + pl.name}</button>`;
+        else if (Access.isOwner && k === 'free' && cur !== 'free') btn = '<button class="btn" data-act="planManage">Cancel in Manage billing</button>';
+        return `<div class="plan-card${k === cur ? ' cur' : ''}${k === sh.want && k !== cur ? ' want' : ''}"><div class="pc-top"><span class="plan-chip ${k}">${pl.name}</span><span class="small muted">${esc(pl.tag)}</span>${amt}</div>${save}<ul>${pl.feats.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>${btn ? `<div class="row">${btn}</div>` : ''}</div>`;
+      };
+      const why = sh.f && FEATURE_NAME[sh.f] ? `<p class="small" style="margin:0"><b>${esc(FEATURE_NAME[sh.f])}</b> comes with ${PLANS[FEATURE_PLAN[sh.f]].name}.</p>` : '';
+      return head('Plans for ' + esc(teamTitle())) + why + `<div>${tog}</div><div class="plans">${PLAN_ORDER.map(card).join('')}</div>
+        ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
+        <p class="small muted" style="margin:0">Each team has its own plan. Secure checkout by Stripe; cancel any time and the team keeps its plan until the end of the period you paid for.${Access.isOwner ? '' : ' Only the team’s owner can change the plan.'}</p>`;
+    },
     teams() {
       const u = Access.user;
       const list = MyTeams.list;
@@ -4603,12 +4719,12 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
       const pv = { primary: HEX.test(f.primaryColor) ? f.primaryColor : '#0B2753', secondary: HEX.test(f.secondaryColor) ? f.secondaryColor : '#6DA0D6', base: HEX.test(f.baseColor) ? f.baseColor : '#04122D' };
       const logo = safeLogo(f.logoURL);
       return head('Team settings & branding') + `<label><span class="field-lbl">Team name</span>${inp('f.name', f.name, 'maxlength="60"')}</label>
-        <div><span class="field-lbl">Logo</span><div class="logo-pick"><span class="lp-img" style="background:${esc(pv.primary)}"><img src="${esc(logo || DEFAULT_LOGO)}" alt=""></span><div class="stack" style="gap:6px"><div class="row" style="gap:8px"><button type="button" class="btn sm primary" data-act="uploadTeamLogo" ${sh.uploading ? 'disabled' : ''}>${sh.uploading ? 'Uploading…' : logo ? 'Change logo' : 'Upload logo'}</button>${logo ? '<button type="button" class="btn sm ghost" data-act="teamLogoClear">Remove</button>' : ''}</div><span class="small muted">PNG with a transparent background looks best. Up to 5 MB.</span></div></div></div>
+        ${has('branding') ? `<div><span class="field-lbl">Logo</span><div class="logo-pick"><span class="lp-img" style="background:${esc(pv.primary)}"><img src="${esc(logo || DEFAULT_LOGO)}" alt=""></span><div class="stack" style="gap:6px"><div class="row" style="gap:8px"><button type="button" class="btn sm primary" data-act="uploadTeamLogo" ${sh.uploading ? 'disabled' : ''}>${sh.uploading ? 'Uploading…' : logo ? 'Change logo' : 'Upload logo'}</button>${logo ? '<button type="button" class="btn sm ghost" data-act="teamLogoClear">Remove</button>' : ''}</div><span class="small muted">PNG with a transparent background looks best. Up to 5 MB.</span></div></div></div>
         <div><span class="field-lbl">Quick color sets</span><div class="presets">${BRAND_PRESETS.map((c, i) => `<button class="preset" data-act="brandPreset" data-v="${i}" aria-label="${esc(c[3])}"><i style="background:${c[0]}"></i><i style="background:${c[1]}"></i></button>`).join('')}</div></div>
         <div class="grid2"><label><span class="field-lbl">Main color</span>${inp('f.primaryColor', pv.primary, 'type="color" data-brand="1"')}</label><label><span class="field-lbl">Accent color</span>${inp('f.secondaryColor', pv.secondary, 'type="color" data-brand="1"')}</label></div>
         <label><span class="field-lbl">Background color</span>${inp('f.baseColor', pv.base, 'type="color" data-brand="1"')}</label>
         <p class="small muted" style="margin:0">Main color: the top bar and scoreboard. Accent: buttons and highlights. Background: the page and cards. Changes show live; Save keeps them for everyone on the team.</p>
-        <details><summary class="small muted">Use a logo web address instead</summary><label style="margin-top:8px;display:block"><span class="field-lbl">Logo URL (https)</span>${inp('f.logoURL', f.logoURL, 'placeholder="https://..." inputmode="url" data-brand="1"')}</label></details>
+        <details><summary class="small muted">Use a logo web address instead</summary><label style="margin-top:8px;display:block"><span class="field-lbl">Logo URL (https)</span>${inp('f.logoURL', f.logoURL, 'placeholder="https://..." inputmode="url" data-brand="1"')}</label></details>` : upsellHTML('branding', { msg: 'Upload your logo and pick your team colors. Families see your brand everywhere in the app.' })}
         <div class="grid2"><label><span class="field-lbl">Pitch limit</span>${inp('f.pitchLimit', f.pitchLimit, 'type="number" min="0" inputmode="numeric"')}</label><label><span class="field-lbl">Innings per game</span>${inp('f.innings', f.innings, 'type="number" min="1" max="12" inputmode="numeric"')}</label></div>
         <p class="small muted" style="margin:0">The live screen warns as your pitcher nears the limit. Set it to 0 to turn the warning off.</p>
         <div class="row"><button class="btn primary" data-act="saveTeamEdit">Save</button><button class="btn" data-act="close">Cancel</button></div>`;
@@ -4640,14 +4756,16 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
         <div class="mu-sub" style="margin-top:-8px">${esc(p ? (p.pos || '') + ' · B/T ' + (p.bats || '?') + '/' + (p.throws || '?') : '')}</div>
         ${tot.PA ? `<div class="board"><span class="lbl">Season batting</span><div class="row" style="gap:18px;margin-top:6px;font-size:16px"><span><b class="num" style="font-family:var(--font-display);font-size:24px;color:var(--carolina)">${E.rate(tot.H, tot.AB)}</b> AVG</span><span class="num">${obp} OBP</span><span class="num">${tot.H}-${tot.AB}</span><span class="num">${tot.HR} HR · ${tot.RBI} RBI</span></div></div>` : ''}
         ${ptot.PC ? `<div class="small"><b>Pitching:</b> ${E.fmtIP(ptot.OUTS)} IP · ${ptot.K} K · ${ptot.BB} BB · ${ptot.H} H · ${ptot.R} R · ${ptot.PC} pitches</div>` : ''}
-        ${pas.length ? `<div class="seg">${[['dots', 'Dots'], ['heat', 'Heat']].map(([k, l]) => `<button data-act="sprayMode" data-k="${k}" aria-pressed="${UI.sprayMode === k}">${l}</button>`).join('')}</div>${fieldSVG({ points: pts, heat: UI.sprayMode === 'heat' })}${UI.sprayMode === 'heat' ? '' : legend(pts.some((x) => x.imp && !x.res), pts.some((x) => !x.imp || x.res) || !pts.length)}${tendHTML(t)}` : '<p class="muted">No plate appearances yet.</p>'}
+        ${pas.length && !has('spray') ? '<p class="small muted" style="margin:0">Spray charts come with the Elite plan.</p>' : ''}${pas.length && has('spray') ? `<div class="seg">${[['dots', 'Dots'], ['heat', 'Heat']].map(([k, l]) => `<button data-act="sprayMode" data-k="${k}" aria-pressed="${UI.sprayMode === k}">${l}</button>`).join('')}</div>${fieldSVG({ points: pts, heat: UI.sprayMode === 'heat' })}${UI.sprayMode === 'heat' ? '' : legend(pts.some((x) => x.imp && !x.res), pts.some((x) => !x.imp || x.res) || !pts.length)}${tendHTML(t)}` : pas.length ? '' : '<p class="muted">No plate appearances yet.</p>'}
         ${log.length ? `<div><span class="field-lbl">Game log</span><div class="plays">${log.slice().reverse().map((x) => `<div class="play"><span class="tag">${esc(parseDate(x.g.date).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }))}</span><span>${x.g.home ? 'vs' : '@'} ${esc(x.g.opponent)} · ${x.b && x.b.PA ? x.b.H + '-' + x.b.AB : ''} ${esc(x.res.join(', '))}${x.p && x.p.PC ? ` · pitched ${E.fmtIP(x.p.OUTS)} IP, ${x.p.PC} P` : ''}</span><span></span></div>`).join('')}</div></div>` : ''}`;
     }
   };
 
   const CAMERA = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2.5h7L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg>';
   function scanBlock(sh, label) {
-    if (!Caps.sample || !canManage()) return '';
+    if (!canManage()) return '';
+    if (!has('aiRoster')) return Access.isOwner ? `<button class="btn" data-act="planOpen" data-plan="elite" data-f="aiRoster">${CAMERA}<span>Scan a roster photo</span><span class="lock-chip">ELITE</span></button>` : '';
+    if (!Caps.sample) return '';
     const sc = sh.scan || {};
     if (sc.busy) return `<div class="scan"><span class="spin" aria-hidden="true"></span><span class="grow">Reading the roster. This can take up to a minute.</span><button class="btn sm" data-act="scanStop">Stop</button></div>`;
     return `<div class="stack" style="gap:6px"><label class="btn ${label === 'secondary' ? '' : 'primary'} scan-btn">${CAMERA}<span>Scan a roster photo</span><input class="vh" type="file" accept="image/*" multiple data-scan="1"></label>
@@ -5688,6 +5806,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
       toast('Roster saved');
     },
     sprayOpen(d) {
+      if (!has('spray')) return planGate('spray');
       const from = UI.sheet;
       if (d.key && from && from.type === 'roster' && rosterDirty(from)) { toast('Save the roster first, then import the spray chart.'); return; }
       let name = '';
@@ -5817,7 +5936,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
       render();
     },
     msgCancel() { Chat.delId = null; render(); },
-    inviteNew() { if (canInvite()) openSheet({ type: 'invite', name: '', token: '', err: '' }); },
+    inviteNew() { if (!has('watch')) return planGate('watch'); if (canInvite()) openSheet({ type: 'invite', name: '', token: '', err: '' }); },
     async inviteMake() {
       const sh = UI.sheet;
       const name = String(sh.name || '').trim().slice(0, 60);
@@ -5896,7 +6015,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
     muteShow(d) { Chat.show.add(d.uid); render(); },
     drillsOpen() { if (!drillsAllowed()) return; UI.tab = 'drills'; render(); window.scrollTo(0, 0); },
     drillsBack() { UI.tab = 'iq'; render(); window.scrollTo(0, 0); },
-    swingOpen() { UI.swingFrom = UI.tab === 'iq' ? 'iq' : 'stats'; UI.tab = 'swing'; render(); window.scrollTo(0, 0); },
+    swingOpen() { if (!has('swing')) return planGate('swing'); UI.swingFrom = UI.tab === 'iq' ? 'iq' : 'stats'; UI.tab = 'swing'; render(); window.scrollTo(0, 0); },
     swingBack() {
       if (SwingUI.mod && SwingUI.mounted && SwingUI.mod.busy()) { toast('Swing AI is still working. Tap Stop first, or wait for it to finish.'); return; }
       UI.tab = UI.swingFrom || 'stats'; render(); window.scrollTo(0, 0);
@@ -6016,6 +6135,10 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
       if (UI.sheet && UI.sheet.type === 'member') closeSheet();
     },
     async memberRole(d) {
+      if (d.role === 'admin' && !has('coaches')) {
+        const coaches = Access.members.filter((m) => m.status === 'approved' && m.role === 'admin' && m.uid !== d.uid).length + (Access.members.some((m) => m.uid === Access.owner) ? 0 : 1);
+        if (coaches >= FREE_COACHES) { if (UI.sheet && UI.sheet.type === 'member') closeSheet(); return planGate('coaches'); }
+      }
       try { await FB.F.updateDoc(teamDoc('members', d.uid), { role: d.role, status: 'approved' }); toast(d.role === 'admin' ? 'Now a coach with admin rights' : d.role === 'camera' ? 'Now a camera operator' : d.role === 'scorer' ? 'Now a scorekeeper' : 'Now a family account'); }
       catch (e) { toast(authErrorText(e)); }
       if (UI.sheet && UI.sheet.type === 'member') closeSheet();
@@ -6595,6 +6718,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
     async uploadTeamLogo() {
       const sh = UI.sheet;
       if (!Access.isAdmin) return;
+      if (!has('branding')) return planGate('branding');
       try {
         const file = await chooseTeamLogo(); if (!file) return;
         if (sh) { sh.uploading = true; renderSheet(); }
@@ -6718,6 +6842,34 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
       if (navigator.share) { try { await navigator.share({ title: teamTitle(), text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
       try { await navigator.clipboard.writeText(text + '\n' + url); toast('Join link copied'); } catch (e) { toast(url); }
     },
+    planOpen(d) {
+      if (!BILLING_ON) return;
+      openSheet({ type: 'plans', interval: (UI.sheet && UI.sheet.interval) || 'year', want: (d && d.plan) || '', f: (d && d.f) || '', busy: '', err: '' });
+    },
+    planInterval(d) { if (UI.sheet && UI.sheet.type === 'plans') { UI.sheet.interval = d.v; renderSheet(); } },
+    async planBuy(d) {
+      const sh = UI.sheet;
+      if (!sh || sh.busy || !Access.isOwner) return;
+      if (!workerUrl()) { sh.err = 'Payments aren’t set up yet. (The app’s Worker address is missing.)'; return renderSheet(); }
+      sh.busy = d.plan; sh.err = ''; renderSheet();
+      try {
+        const back = location.origin + location.pathname + '?team=' + encodeURIComponent(TEAM_ID);
+        const r = await workerPost({ task: 'billing-checkout', plan: d.plan, interval: sh.interval === 'month' ? 'month' : 'year', back });
+        if (r.ok && r.d.url) { location.href = r.d.url; return; }
+        if (r.d.error === 'has_subscription') { sh.busy = ''; renderSheet(); return A.planManage(); }
+        sh.err = r.d.error === 'billing_not_configured' ? 'Payments aren’t set up yet. The app’s owner needs to add Stripe to the Worker.' : r.d.error === 'not_owner' ? 'Only the team’s owner can change the plan.' : 'Couldn’t open checkout. Try again in a minute.';
+      } catch (e) { sh.err = 'Couldn’t reach checkout. Check your connection and try again.'; }
+      sh.busy = ''; if (UI.sheet === sh) renderSheet();
+    },
+    async planManage() {
+      if (!Access.isOwner) return;
+      toast('Opening billing…');
+      try {
+        const r = await workerPost({ task: 'billing-portal', back: location.origin + location.pathname + '?team=' + encodeURIComponent(TEAM_ID) + '#team' });
+        if (r.ok && r.d.url) { location.href = r.d.url; return; }
+        toast(r.d.error === 'no_customer' ? 'This team doesn’t have a paid plan yet.' : 'Couldn’t open billing. Try again in a minute.');
+      } catch (e) { toast('Couldn’t reach billing. Check your connection.'); }
+    },
     expandToggle(d) {
       const k = d.key, open = !UI.expand[k];
       UI.expand[k] = open; render();
@@ -6746,6 +6898,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
     practiceSave() { const sh=UI.sheet;if(!Access.isAdmin||!sh||sh.type!=='practice')return; if(!sh.f.date){sh.err='Choose a date.';return renderSheet()} const id=sh.id||uid('p'),p={id,...sh.f,updatedAt:Date.now()};Data.practices[id]=p;Saver.put('practices/'+id,p);closeSheet();render(); },
     practiceDelete(d) { if(!Access.isAdmin||!d.id||!confirm('Delete this practice?'))return;delete Data.practices[d.id];removePath('practices/'+d.id,'practice');closeSheet();render(); },
     async camOpen() {
+      if (!has('liveVideo')) return planGate('liveVideo');
       const g = liveGame();
       if (!g) { toast('Start the game first, then stream it.'); return; }
       if (!loadAiCfg()) { toast('Connect your Cloudflare Worker first, under Team.'); return; }
@@ -6883,7 +7036,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
       const r = Recs.list && Recs.list.find((x) => x.rid === d.rid);
       if (r && r.yt && r.gid) { await ytSetReplay(r.gid, r.yt.id); render(); if (Cam.open) camRender(); }
     },
-    ytSetup() { const y = Data.team.yt || {}; openSheet({ type: 'yt', clientId: y.clientId || '', auto: y.auto !== false, attach: !!y.attach }); },
+    ytSetup() { if (!has('ytUpload')) return planGate('ytUpload'); const y = Data.team.yt || {}; openSheet({ type: 'yt', clientId: y.clientId || '', auto: y.auto !== false, attach: !!y.attach }); },
     ytAuto(d) { UI.sheet.auto = d.v === 'on'; renderSheet(); },
     ytAttach(d) { UI.sheet.attach = d.v === 'on'; renderSheet(); },
     ytSave() {

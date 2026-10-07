@@ -49,21 +49,25 @@ service cloud.firestore {
       }
       // Branding fields a team may set on its public directory card.
       function brandOk(d) {
-        return d.keys().hasOnly(['name', 'logoURL', 'primaryColor', 'secondaryColor', 'baseColor', 'owner', 'createdAt', 'updatedAt', 'sport', 'active', 'plan'])
+        return d.keys().hasOnly(['name', 'logoURL', 'primaryColor', 'secondaryColor', 'baseColor', 'owner', 'createdAt', 'updatedAt', 'sport',
+            'active', 'plan', 'planStatus', 'planInterval', 'planRenews', 'planCancels', 'planUpdatedAt'])
           && d.name is string && d.name.size() > 0 && d.name.size() <= 60
           && d.get('logoURL', '') is string && d.get('logoURL', '').size() <= 1000;
       }
 
+      // The paid-plan fields. Only the Worker (Stripe payments) or the app owner in the Firebase
+      // console sets them; no one can give their own team a plan from the app.
+      function planKeys() { return ['active', 'plan', 'planStatus', 'planInterval', 'planRenews', 'planCancels', 'planUpdatedAt']; }
+
       // The team's public card: name, logo and colors (so the sign-in screen shows the team's brand,
-      // and My Teams can list it). Created by whoever creates the team. 'active' and 'plan' are for
-      // the app's owner to set from the Firebase console (billing); teams can't change them.
+      // and My Teams can list it) plus the team's plan. Created by whoever creates the team.
       allow read: if true;
       allow create: if signedIn() && validTeamId() && brandOk(request.resource.data)
-        && !request.resource.data.keys().hasAny(['active', 'plan'])
+        && !request.resource.data.keys().hasAny(planKeys())
         && ((request.resource.data.owner == request.auth.uid && !exists(docPath('config', 'setup')))
           || (isAdmin() && request.resource.data.owner == get(docPath('config', 'setup')).data.owner));
       allow update: if brandOk(request.resource.data)
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['owner', 'createdAt', 'active', 'plan'])
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['owner', 'createdAt'].concat(planKeys()))
         && (isAdmin() || (signedIn() && resource.data.owner == request.auth.uid && !exists(docPath('config', 'setup'))));
 
       // Who owns this team. Claimed once, by the person who created the team's card; never changed after.
@@ -75,6 +79,11 @@ service cloud.firestore {
           && exists(teamPath()) && get(teamPath()).data.owner == request.auth.uid;
       }
   
+      // Stripe customer and subscription for the team's plan. Written only by the Worker; the owner can read it.
+      match /config/billing {
+        allow read: if isOwner();
+      }
+
       // The "who can watch" switch. Everyone may read it so the page knows whether to ask for a sign-in.
       match /config/access {
         allow read: if true;

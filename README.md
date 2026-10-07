@@ -11,6 +11,7 @@ It's built to be sold to many teams at once. Every team brands it as their own a
 - **Families can be on many teams.** **Teams → Join a team** with the code the coach shares. A coach approves them, then the team shows up in their list.
 - **Team switcher.** The **Teams** button at the top (or tapping the team name) lists every team you're on, with logo, your role and whether you're still waiting for approval. Tap one to switch. A new phone opens the team you used last.
 - **Team code and join link.** Coaches see the team code on the Team tab, with **Copy code** and **Share join link**.
+- **Paid plans.** Free, Pro and Elite per team, with Stripe checkout, a Manage billing button, and features that lock and unlock on their own. See SETUP.md, Paid plans.
 - **Expandable lists.** On the Team tab, the **Roster**, **Coaches & staff**, **Families** and **Opponent rosters** show the first few names with **Show all** to expand and **Show less** to fold back. Each heading shows the count.
 
 ## Setting it up
@@ -276,7 +277,7 @@ Roster photo scanning, scouting reports, the built-in camera, chat photos, fee r
 | `CF_ACCOUNT_ID` | Text | Built-in camera (your Cloudflare account ID) |
 | `FIREBASE_SERVICE_ACCOUNT` | Secret | Phone notifications, chat photos and tournament fees (see [Notifications](#notifications)) |
 | `ALLOWED_ORIGIN` | Text | **Required.** Your app's address, e.g. `https://app.yourdomain.com` (comma-separate several) |
-| `REQUIRE_ACTIVE` | Text | Optional. `1` = AI, live video and chat photos only for paying teams (see SETUP.md, Billing) |
+| `STRIPE_*`, `COMP_TEAMS`, `PLANS` | | Paid plans (see SETUP.md, Paid plans) |
 | `APP_NAME` | Text | Optional. Your app's name in notifications |
 | `TEAM_IDS` | Text | Optional. Teams are found automatically; not needed |
 
