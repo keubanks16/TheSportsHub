@@ -1270,8 +1270,24 @@ body.viewer-on { overflow: hidden; }
     const primary = /^#[0-9a-f]{6}$/i.test(team.primaryColor || '') ? team.primaryColor : '#0B2753';
     const secondary = /^#[0-9a-f]{6}$/i.test(team.secondaryColor || '') ? team.secondaryColor : '#6DA0D6';
     const r = document.documentElement.style;
-    r.setProperty('--navy', primary); r.setProperty('--board', primary); r.setProperty('--pick', primary); r.setProperty('--c1', primary);
-    r.setProperty('--carolina', secondary); r.setProperty('--hit', secondary); r.setProperty('--c3', secondary);
+    // Team branding: primary controls the main team surfaces; secondary controls accents/actions.
+    // Keep these roles separate so changing one color never silently substitutes for the other.
+    const inkFor = (hex) => {
+      const n = parseInt(hex.slice(1), 16), rr = (n >> 16) & 255, gg = (n >> 8) & 255, bb = n & 255;
+      return ((rr * 299 + gg * 587 + bb * 114) / 1000) > 155 ? '#04122D' : '#FFFFFF';
+    };
+    r.setProperty('--navy', primary);
+    r.setProperty('--board', primary);
+    r.setProperty('--c1', primary);
+    r.setProperty('--c1-ink', inkFor(primary));
+    r.setProperty('--carolina', secondary);
+    r.setProperty('--accent', secondary);
+    r.setProperty('--pick', secondary);
+    r.setProperty('--hit', secondary);
+    r.setProperty('--c3', secondary);
+    r.setProperty('--accent-ink', inkFor(secondary));
+    r.setProperty('--pick-ink', inkFor(secondary));
+    r.setProperty('--c3-ink', inkFor(secondary));
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', primary);
     const logo = document.querySelector('.mark');
     if (logo && team.logoURL) logo.src = team.logoURL;
@@ -1604,7 +1620,7 @@ body.viewer-on { overflow: hidden; }
   }
   function renderGate() {
     const X = Access;
-    const tsb = document.getElementById('teamSwitchBtn'); if (tsb) { tsb.style.display = (X.user && !X.user.isAnonymous) ? '' : 'none'; tsb.textContent = 'My Teams'; tsb.title = 'My Teams'; }
+    const tsb = document.getElementById('teamSwitchBtn'); if (tsb) { tsb.style.display = (X.user && !X.user.isAnonymous) ? '' : 'none'; tsb.textContent = 'Switch team'; tsb.title = 'Switch between your teams'; }
     const name = (X.member && X.member.name) || (X.user && (X.user.displayName || X.user.email)) || '';
     let body, actions;
     const anon = X.user && X.user.isAnonymous;
@@ -1632,8 +1648,8 @@ body.viewer-on { overflow: hidden; }
         actions = '<button class="btn primary" data-act="createTeam">Create a Team</button><button class="btn" data-act="joinTeam">Join a Team</button><button class="btn ghost" data-act="signOut">Sign out</button>';
       }
     } else if (!X.user || anon) {
-      body = 'Sign in to follow games, box scores and stats. New families can ask for access, and a coach approves it.';
-      actions = '<button class="btn primary" data-act="authOpen" data-mode="signin">Sign in</button><button class="btn" data-act="authOpen" data-mode="signup">Request access</button>';
+      body = 'Sign in to follow games, box scores and stats. New families can create an account, and a coach approves access.';
+      actions = '<button class="btn primary" data-act="authOpen" data-mode="signin">Sign in</button><button class="btn" data-act="authOpen" data-mode="signup">Create Account</button>';
     } else if (X.member && X.member.status === 'pending') {
       body = `Thanks${name ? ', ' + name : ''}. A coach needs to approve your account before you can see games. This page opens up as soon as they do.`;
       actions = '<button class="btn" data-act="signOut">Sign out</button>';
@@ -1656,7 +1672,7 @@ body.viewer-on { overflow: hidden; }
       h += '<div class="hr"></div><div class="row"><span class="grow small muted">Coach or team family with an account?</span><button class="btn sm" data-act="authOpen" data-mode="signin">Sign in</button></div>';
     } else if (X.user) {
       const role = X.isOwner ? 'Admin (team owner)' : X.isAdmin ? 'Coach (admin)' : X.isCamera ? 'Camera operator (streams games)' : X.isScorer ? 'Scorekeeper (scores games)' : X.isApproved ? 'Family (view only)' : 'Waiting for approval';
-      h += `<div class="row"><div class="grow"><b>${esc((X.member && X.member.name) || X.user.displayName || X.user.email)}</b><div class="small muted">${esc(X.user.email || '')} · ${esc(role)}</div></div><button class="btn sm" data-act="signOut">Sign out</button></div>`;
+      h += `<div class="row"><div class="grow"><b>${esc((X.member && X.member.name) || X.user.displayName || X.user.email)}</b><div class="small muted">${esc(X.user.email || '')} · ${esc(role)}</div></div><button class="btn sm" data-act="teamSwitch">Switch team</button><button class="btn sm" data-act="signOut">Sign out</button></div>`;
       if (chatAllowed()) {
         const muted = mutedList();
         h += `<div class="hr"></div><div class="row" id="muted"><div class="grow"><b>Muted in team chat</b><div class="small muted">${muted.length ? esc(muted.map(([, n]) => n).join(', ')) : 'Nobody. To mute someone, tap one of their messages in Chat.'}</div></div>${muted.length ? '<button class="btn sm" data-act="muteManage">Manage</button>' : ''}</div>`;
@@ -4239,16 +4255,16 @@ body.viewer-on { overflow: hidden; }
       return h;
     },
     auth(sh) {
-      const titles = { signin: 'Sign in', signup: 'Request access', setup: 'Create the admin account', account: 'Create Account', reset: 'Reset your password' };
+      const titles = { signin: 'Sign in', signup: 'Create Account', setup: 'Create the admin account', account: 'Create Account', reset: 'Reset your password' };
       let f = '';
       if (sh.mode === 'signup' || sh.mode === 'setup' || sh.mode === 'account') f += `<label><span class="field-lbl">Your name</span>${inp('name', sh.name, 'autocomplete="name" placeholder="First and last name"')}</label>`;
       f += `<label><span class="field-lbl">Email</span>${inp('email', sh.email, 'type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false"')}</label>`;
       if (sh.mode !== 'reset') f += `<label><span class="field-lbl">Password</span>${inp('password', sh.password, `type="password" autocomplete="${sh.mode === 'signin' ? 'current-password' : 'new-password'}" ${sh.mode === 'signin' ? '' : 'placeholder="At least 6 characters"'}`)}</label>`;
       if (sh.mode === 'signup') f += `<label><span class="field-lbl">Your player</span>${inp('note', sh.note, 'placeholder="e.g. Wyatt Kell #7 (helps the coach approve you)"')}</label>`;
       const intro = { signin: '', signup: '<p class="small muted" style="margin:0">A coach approves new accounts before they can see games.</p>', setup: '<p class="small muted" style="margin:0">This account gets admin rights: scoring, rosters and approving families.</p>', reset: '<p class="small muted" style="margin:0">We’ll email you a link to choose a new password.</p>' }[sh.mode];
-      const links = sh.mode === 'signin' ? '<div class="row"><button class="btn ghost sm" data-act="authMode" data-mode="reset">Forgot password?</button><button class="btn ghost sm" data-act="authMode" data-mode="signup">New family? Request access</button></div>'
+      const links = sh.mode === 'signin' ? '<div class="row"><button class="btn ghost sm" data-act="authMode" data-mode="reset">Forgot password?</button><button class="btn ghost sm" data-act="authMode" data-mode="signup">New family? Create account</button></div>'
         : sh.mode === 'reset' || sh.mode === 'signup' ? '<div class="row"><button class="btn ghost sm" data-act="authMode" data-mode="signin">Back to sign in</button></div>' : '';
-      const btn = { signin: 'Sign in', signup: 'Request access', setup: 'Create admin account', reset: 'Send reset email' }[sh.mode];
+      const btn = { signin: 'Sign in', signup: 'Create Account', setup: 'Create admin account', account: 'Create Account', reset: 'Send reset email' }[sh.mode];
       return head(titles[sh.mode]) + intro + f
         + (sh.msg ? `<div class="small" style="color:var(--good);font-weight:600">${esc(sh.msg)}</div>` : '')
         + (sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : '')
