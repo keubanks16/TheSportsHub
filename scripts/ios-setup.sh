@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the iPhone project in ios/ from this repo (run on a Mac, or by the GitHub Actions workflow).
-#   GOOGLE_SERVICE_INFO_PLIST  the Firebase iOS app's GoogleService-Info.plist, as text or base64
-#                              (or put the file at native/ios/GoogleService-Info.plist; it's git-ignored)
+#   native/ios/GoogleService-Info.plist  the Firebase iOS app's config file (not secret; it's committed)
+#   GOOGLE_SERVICE_INFO_PLIST  or the same file's text (or base64) as a GitHub secret
 #   APPLE_TEAM_ID                  optional; your Apple Developer Team ID for signing
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -15,14 +15,23 @@ if [ ! -d ios/App ]; then
   npx cap add ios --packagemanager SPM
 fi
 
-# Firebase (phone notifications)
-if [ -n "${GOOGLE_SERVICE_INFO_PLIST:-}" ]; then
-  if printf '%s' "$GOOGLE_SERVICE_INFO_PLIST" | grep -q '<plist'; then printf '%s\n' "$GOOGLE_SERVICE_INFO_PLIST"
-  else printf '%s' "$GOOGLE_SERVICE_INFO_PLIST" | base64 --decode; fi > ios/App/App/GoogleService-Info.plist
-elif [ -f native/ios/GoogleService-Info.plist ]; then
-  cp native/ios/GoogleService-Info.plist ios/App/App/GoogleService-Info.plist
+# Firebase (phone notifications). The file in the repo wins; otherwise the GitHub secret (text or base64).
+PLIST_OUT=ios/App/App/GoogleService-Info.plist
+if [ -f native/ios/GoogleService-Info.plist ]; then
+  cp native/ios/GoogleService-Info.plist "$PLIST_OUT"
+elif [ -n "${GOOGLE_SERVICE_INFO_PLIST:-}" ]; then
+  if printf '%s' "$GOOGLE_SERVICE_INFO_PLIST" | grep -q -e '<plist' -e '<dict>' -e 'GOOGLE_APP_ID'; then
+    printf '%s\n' "$GOOGLE_SERVICE_INFO_PLIST" > "$PLIST_OUT"
+  elif ! printf '%s' "$GOOGLE_SERVICE_INFO_PLIST" | base64 --decode > "$PLIST_OUT" 2>/dev/null; then
+    echo "::error::GOOGLE_SERVICE_INFO_PLIST isn't the GoogleService-Info.plist text (it should start with <?xml). Re-paste it, or add the file at native/ios/GoogleService-Info.plist." >&2
+    exit 1
+  fi
 else
-  echo "Missing GoogleService-Info.plist: set GOOGLE_SERVICE_INFO_PLIST or add native/ios/GoogleService-Info.plist" >&2
+  echo "::error::Missing GoogleService-Info.plist: add native/ios/GoogleService-Info.plist or the GOOGLE_SERVICE_INFO_PLIST secret" >&2
+  exit 1
+fi
+if ! grep -q 'GOOGLE_APP_ID' "$PLIST_OUT"; then
+  echo "::error::GoogleService-Info.plist doesn't look like the Firebase iOS file (no GOOGLE_APP_ID inside)." >&2
   exit 1
 fi
 

@@ -2,4 +2,3 @@ node_modules/
 /www/
 /ios/
 *.p8
-GoogleService-Info.plist
