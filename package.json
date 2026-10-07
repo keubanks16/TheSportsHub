@@ -1,0 +1,21 @@
+{
+  "name": "thesportshub",
+  "private": true,
+  "version": "1.0.0",
+  "description": "The Hub: team app for youth baseball and softball (website + iPhone app)",
+  "type": "module",
+  "scripts": {
+    "build:www": "node scripts/build-www.mjs",
+    "ios:setup": "bash scripts/ios-setup.sh",
+    "ios:open": "npx cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0",
+    "@capacitor-firebase/messaging": "^8.5.0",
+    "@capgo/native-purchases": "^8.8.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.0"
+  }
+}

@@ -21,14 +21,18 @@
 // and under Settings -> Bindings add an R2 bucket with the variable name PHOTOS (chat photos),
 // and under Settings -> Triggers add a Cron Trigger that runs every minute (* * * * *).
 //   ALLOWED_ORIGIN     Text    REQUIRED: your app's address(es), comma separated, e.g. https://app.example.com
-//   Paid plans (Free / Pro / Elite, per team) through Stripe:
-//   STRIPE_SECRET_KEY        Secret  Stripe -> Developers -> API keys -> Secret key (sk_live_... or sk_test_...)
-//   STRIPE_WEBHOOK_SECRET    Secret  Stripe -> Developers -> Webhooks -> your endpoint -> Signing secret (whsec_...)
-//   STRIPE_PRICE_PRO_MONTH, STRIPE_PRICE_PRO_YEAR, STRIPE_PRICE_ELITE_MONTH, STRIPE_PRICE_ELITE_YEAR
-//                            Text    the price IDs (price_...) of your four Stripe prices
+//   Paid plans (Free / Pro / Elite, per team) through Apple in-app purchases (see APP_STORE.md):
+//   APPLE_BUNDLE_ID          Text    the iPhone app's bundle ID, e.g. com.kollinmeubanks.thesportshub
+//   APPLE_ISSUER_ID          Text    App Store Connect -> Users and Access -> Integrations -> In-App Purchase -> Issuer ID
+//   APPLE_KEY_ID             Text    the In-App Purchase key's Key ID
+//   APPLE_PRIVATE_KEY        Secret  the whole .p8 file of that In-App Purchase key
+//   APPLE_PRODUCT_PRO_MONTH, APPLE_PRODUCT_PRO_YEAR, APPLE_PRODUCT_ELITE_MONTH, APPLE_PRODUCT_ELITE_YEAR
+//                            Text    optional; product IDs default to <bundle id>.pro.monthly, .pro.yearly,
+//                                    .elite.monthly and .elite.yearly
+//   APPLE_SANDBOX            Text    optional; "off" = TestFlight/sandbox purchases don't turn plans on
 //   PLANS                    Text    optional; "off" = every team gets everything (no plans)
 //   COMP_TEAMS               Text    optional; comma-separated team codes that always get Elite (your own teams)
-//   Webhook address to give Stripe: https://<your-worker>/stripe-webhook
+//   App Store Server Notifications V2 address to give Apple: https://<your-worker>/apple-notifications
 //   TEAM_IDS           Text    optional; teams are found automatically. Only needed for very old teams.
 //   MODEL              Text    optional; defaults to claude-sonnet-5-5
 //   APP_NAME           Text    optional; your app's name in notifications (defaults to The Hub)
@@ -43,7 +47,7 @@ const MAX_IMAGE_B64 = 6000000; // about 4.5 MB per image
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const PHOTO_TASKS = ['photo-urls', 'photo-delete'];
 const PAY_TASKS = ['fee-remind'];
-const BILLING_TASKS = ['billing-checkout', 'billing-portal'];
+const BILLING_TASKS = ['iap-token', 'iap-link'];
 // ---------- Plans ----------
 // Which plan each server-side feature needs. The team's plan is teams/{id}.plan, written only here.
 const PLAN_ORDER = ['free', 'pro', 'elite'];
@@ -81,8 +85,8 @@ export default {
       return new Response('{}', { headers: { 'content-type': 'application/json' } });
     }
     const here = new URL(request.url);
-    // Stripe tells us about payments here (signed with STRIPE_WEBHOOK_SECRET; no browser involved).
-    if (request.method === 'POST' && here.pathname === '/stripe-webhook') return stripeWebhook(request, env);
+    // Apple tells us about renewals, cancellations and refunds here (no browser involved).
+    if (request.method === 'POST' && here.pathname === '/apple-notifications') return appleNotification(request, env);
     // Chat photos are shown with plain <img> links, so they're checked by a signature, not a sign-in.
     if (request.method === 'GET' && here.pathname.startsWith('/p/')) return photoServe(here, env);
     const origin = request.headers.get('Origin') || '';
@@ -116,7 +120,8 @@ export default {
     // Team members prove who they are with their Hub sign-in, not the coaches' access code.
     if (PHOTO_TASKS.includes(task)) return photoTask(task, request, body, env, reply, ctx, here.origin, allowed[0]);
     if (PAY_TASKS.includes(task)) return payTask(task, request, body, env, reply, allowed);
-    if (BILLING_TASKS.includes(task)) return billingTask(task, request, body, env, reply, allowed);
+    if (BILLING_TASKS.includes(task)) return billingTask(task, request, body, env, reply);
+    if (task === 'account-delete') return accountDelete(request, env, reply);
     // Coaches (and camera operators, for live video) are recognized by their sign-in for their team.
     // The shared ACCESS_CODE still works for setups that use it.
     const codeOk = !!env.ACCESS_CODE && sameText(request.headers.get('x-gs-code') || '', String(env.ACCESS_CODE));
@@ -391,7 +396,7 @@ async function payTask(task, request, body, env, reply, allowed) {
         if (!toks.length) { noApp.push(name(pid)); continue; }
         reached.push(pid);
         const due = dueText(fee.due);
-        for (const t of toks) items.push({ id: t._id, token: t.token, title: 'Fee reminder: ' + String(fee.name || 'Tournament'), body: money(Number(fee.amount) || 0) + ' for ' + name(pid) + (due ? ' is due ' + due : ' is due') + '. Tap to pay.', tag: 'fee-' + feeId + '-' + pid, link: site + '/?team=' + encodeURIComponent(u.teamId) + '#team', icon: site + '/icons/icon-192.png' });
+        for (const t of toks) items.push({ id: t._id, token: t.token, native: !!t.native, title: 'Fee reminder: ' + String(fee.name || 'Tournament'), body: money(Number(fee.amount) || 0) + ' for ' + name(pid) + (due ? ' is due ' + due : ' is due') + '. Tap to pay.', tag: 'fee-' + feeId + '-' + pid, link: site + '/?team=' + encodeURIComponent(u.teamId) + '#team', icon: site + '/icons/icon-192.png' });
       }
       if (items.length) await sendItems(u.sa.project_id, await googleToken(u.sa), items.slice(0, 60), u.db);
       return reply(200, { reminded: reached.length, noApp });
@@ -411,7 +416,7 @@ async function googleToken(sa) {
   if (GTOK && GTOK.email === sa.client_email && GTOK.exp > Date.now() + 120000) return GTOK.token;
   const now = Math.floor(Date.now() / 1000);
   const enc = (o) => b64url(new TextEncoder().encode(JSON.stringify(o)));
-  const unsigned = enc({ alg: 'RS256', typ: 'JWT' }) + '.' + enc({ iss: sa.client_email, scope: 'https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/datastore', aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600 });
+  const unsigned = enc({ alg: 'RS256', typ: 'JWT' }) + '.' + enc({ iss: sa.client_email, scope: 'https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/identitytoolkit', aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600 });
   const der = Uint8Array.from(atob(String(sa.private_key).replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')), (c) => c.charCodeAt(0));
   const key = await crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
   const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(unsigned));
@@ -506,99 +511,207 @@ function firestore(pid, tok, teamId) {
   };
 }
 
-// ---------- Paid plans (Stripe) ----------
-async function stripe(env, method, path, params) {
-  const body = params ? new URLSearchParams(params).toString() : undefined;
-  const r = await fetch('https://api.stripe.com/v1/' + path + (method === 'GET' && body ? '?' + body : ''), {
-    method, headers: { Authorization: 'Bearer ' + env.STRIPE_SECRET_KEY, 'content-type': 'application/x-www-form-urlencoded' }, body: method === 'GET' ? undefined : body
-  });
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw { status: 502, error: 'stripe', detail: (d.error && d.error.message) || ('Stripe ' + r.status) };
-  return d;
+// ---------- Paid plans (Apple in-app purchases) ----------
+// Teams buy Pro or Elite inside the iPhone app with Apple in-app purchases (StoreKit). Every
+// purchase carries the team's appAccountToken (a random id the Worker hands out per team), so a
+// purchase, a renewal or a cancellation always lands on the right team. The Worker never trusts
+// what the phone or a notification says about a subscription: it asks Apple's App Store Server API
+// for the current state and sets the team's plan from that.
+const APPLE_API = { Production: 'https://api.storekit.itunes.apple.com', Sandbox: 'https://api.storekit-sandbox.itunes.apple.com' };
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+function appleProducts(env) {
+  const bid = String(env.APPLE_BUNDLE_ID || '').trim();
+  const pick = (k, d) => String(env[k] || (bid ? bid + d : '')).trim();
+  return {
+    [pick('APPLE_PRODUCT_PRO_MONTH', '.pro.monthly')]: { plan: 'pro', interval: 'month' },
+    [pick('APPLE_PRODUCT_PRO_YEAR', '.pro.yearly')]: { plan: 'pro', interval: 'year' },
+    [pick('APPLE_PRODUCT_ELITE_MONTH', '.elite.monthly')]: { plan: 'elite', interval: 'month' },
+    [pick('APPLE_PRODUCT_ELITE_YEAR', '.elite.yearly')]: { plan: 'elite', interval: 'year' }
+  };
 }
-function priceFor(env, plan, interval) { return env['STRIPE_PRICE_' + plan.toUpperCase() + '_' + (interval === 'month' ? 'MONTH' : 'YEAR')] || ''; }
-function planForPrice(env, price) {
-  for (const pl of ['pro', 'elite']) for (const iv of ['month', 'year']) if (price && priceFor(env, pl, iv) === price) return { plan: pl, interval: iv };
+const appleReady = (env) => !!(env.APPLE_ISSUER_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY && env.APPLE_BUNDLE_ID && env.FIREBASE_SERVICE_ACCOUNT);
+// Reads the middle part of a JWS without checking it. Only used to find which transaction to ask
+// Apple about; the answer from Apple's own API is what counts.
+function jwsPayload(jws) {
+  try { const p = String(jws || '').split('.'); return p.length === 3 ? JSON.parse(new TextDecoder().decode(b64urlBytes(p[1]))) : null; } catch (e) { return null; }
+}
+let ATOK = null;
+async function appleToken(env) {
+  if (ATOK && ATOK.exp > Date.now() + 120000) return ATOK.token;
+  const now = Math.floor(Date.now() / 1000);
+  const enc = (o) => b64url(new TextEncoder().encode(JSON.stringify(o)));
+  const unsigned = enc({ alg: 'ES256', kid: String(env.APPLE_KEY_ID).trim(), typ: 'JWT' }) + '.' + enc({ iss: String(env.APPLE_ISSUER_ID).trim(), iat: now, exp: now + 1800, aud: 'appstoreconnect-v1', bid: String(env.APPLE_BUNDLE_ID).trim() });
+  const der = Uint8Array.from(atob(String(env.APPLE_PRIVATE_KEY).replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')), (c) => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey('pkcs8', der, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, new TextEncoder().encode(unsigned));
+  ATOK = { token: unsigned + '.' + b64url(new Uint8Array(sig)), exp: Date.now() + 1700 * 1000 };
+  return ATOK.token;
+}
+// Current state of a subscription from Apple. Tries the environment the purchase came from first
+// (TestFlight and App Review buy in Sandbox), then the other one.
+async function appleSubscription(env, transactionId, envHint) {
+  const sandboxOk = String(env.APPLE_SANDBOX || 'on').toLowerCase() !== 'off';
+  const order = envHint === 'Sandbox' ? ['Sandbox', 'Production'] : ['Production', 'Sandbox'];
+  for (const where of order) {
+    if (where === 'Sandbox' && !sandboxOk) continue;
+    const r = await fetch(APPLE_API[where] + '/inApps/v1/subscriptions/' + encodeURIComponent(transactionId), { headers: { Authorization: 'Bearer ' + await appleToken(env) } });
+    if (r.status === 404) continue;
+    if (r.status === 401) { ATOK = null; throw { status: 502, error: 'apple_auth', detail: 'Apple refused the In-App Purchase key. Check APPLE_ISSUER_ID, APPLE_KEY_ID and APPLE_PRIVATE_KEY.' }; }
+    if (!r.ok) throw { status: 502, error: 'apple', detail: 'Apple ' + r.status };
+    const d = await r.json();
+    if (String(d.bundleId || '') !== String(env.APPLE_BUNDLE_ID).trim()) throw { status: 400, error: 'wrong_app' };
+    const products = appleProducts(env);
+    // The newest of our plan subscriptions in the answer (normally there is exactly one).
+    let best = null;
+    for (const g of d.data || []) for (const last of g.lastTransactions || []) {
+      const tx = jwsPayload(last.signedTransactionInfo) || {};
+      const ren = jwsPayload(last.signedRenewalInfo) || {};
+      if (!products[tx.productId]) continue;
+      const s = { status: Number(last.status), otid: String(last.originalTransactionId || tx.originalTransactionId || ''), tx, ren, environment: d.environment || where };
+      if (!best || Number(tx.purchaseDate || 0) > Number(best.tx.purchaseDate || 0)) best = s;
+    }
+    return best;
+  }
   return null;
 }
-// Checkout and the billing portal: only the team's owner, signed in.
-async function billingTask(task, request, body, env, reply, allowed) {
-  if (!env.STRIPE_SECRET_KEY) return reply(500, { error: 'billing_not_configured' });
+// Root-level documents (outside any team) that only the Worker can read or write.
+function rootDocs(sa, tok) {
+  const base = 'https://firestore.googleapis.com/v1/projects/' + sa.project_id + '/databases/(default)/documents/';
+  const H = { Authorization: 'Bearer ' + tok, 'content-type': 'application/json' };
+  return {
+    async get(path) { const r = await fetch(base + path, { headers: H }); if (r.status === 404) return null; if (!r.ok) throw new Error('firestore get ' + r.status); const d = await r.json(); return fsObj(d.fields); },
+    async set(path, data) { const r = await fetch(base + path, { method: 'PATCH', headers: H, body: JSON.stringify({ fields: fsEnc(data).mapValue.fields }) }); return r.ok; },
+    async list(path) { const r = await fetch(base + path + '?pageSize=300', { headers: H }); if (!r.ok) return []; return ((await r.json()).documents || []).map((d) => Object.assign(fsObj(d.fields), { _id: d.name.split('/').pop() })); },
+    async del(path) { await fetch(base + path, { method: 'DELETE', headers: H }).catch(() => {}); }
+  };
+}
+// Which team a subscription belongs to: its appAccountToken first, then a purchase linked earlier.
+async function appleTeamFor(root, sub) {
+  const t = String((sub.tx && sub.tx.appAccountToken) || '').toLowerCase();
+  if (UUID_RE.test(t)) { const m = await root.get('appleTokens/' + t); if (m && m.teamId) return cleanTeamId(m.teamId); }
+  if (sub.otid) { const m = await root.get('appleSubs/' + sub.otid); if (m && m.teamId) return cleanTeamId(m.teamId); }
+  return '';
+}
+// Sets the team's plan from Apple's answer.
+async function applyApple(env, sa, tok, teamId, sub) {
+  const db = firestore(sa.project_id, tok, teamId);
+  const bill = (await db.get('config/billing')) || {};
+  const found = appleProducts(env)[sub.tx.productId];
+  // 1 active, 4 billing grace period (Apple is retrying the card and the team keeps its plan).
+  const live = !!found && (sub.status === 1 || sub.status === 4) && !sub.tx.revocationDate;
+  // A team that moved to another subscription doesn't lose its plan when the old one ends.
+  if (!live && bill.appleOtid && bill.appleOtid !== sub.otid) return { plan: null, skipped: 'other_subscription' };
+  const plan = live ? found.plan : 'free';
+  const planStatus = sub.status === 1 ? 'active' : sub.status === 4 ? 'past_due' : sub.status === 3 ? 'billing_retry' : sub.status === 5 ? 'revoked' : 'expired';
+  const end = Number(sub.tx.expiresDate || 0);
+  const cancels = live && Number(sub.ren.autoRenewStatus) === 0;
+  // A switch Apple will make at the next renewal (for example Elite to Pro).
+  const next = live && !cancels && sub.ren.autoRenewProductId && sub.ren.autoRenewProductId !== sub.tx.productId ? appleProducts(env)[sub.ren.autoRenewProductId] : null;
+  await db.patch('', { plan, planStatus, planInterval: live ? found.interval : '', planRenews: live ? end : 0, planCancels: cancels, planUpdatedAt: Date.now() });
+  await db.patch('config/billing', { store: 'apple', appleOtid: sub.otid, appleProduct: String(sub.tx.productId || ''), appleNext: next ? next.plan + '-' + next.interval : '', appleEnv: String(sub.environment || ''), status: planStatus, plan, updatedAt: Date.now() });
+  return { plan };
+}
+// From the iPhone app: iap-token (owner gets the team's appAccountToken before buying) and
+// iap-link (after a purchase or a restore, the app sends the signed transactions it has).
+async function billingTask(task, request, body, env, reply) {
+  if (!appleReady(env)) return reply(500, { error: 'billing_not_configured' });
   let u;
   try { u = await hubUser(request, env); } catch (e) { return reply(e.status || 500, { error: e.error || 'upstream' }); }
-  if (!u.owner) return reply(403, { error: 'not_owner' });
-  const back = backUrl(body.back, allowed);
-  const withParam = (k, v) => { const x = new URL(back); x.searchParams.set('team', u.teamId); x.searchParams.set(k, v); return x.toString(); };
   try {
-    const bill = (await u.db.get('config/billing')) || {};
-    if (task === 'billing-portal') {
-      if (!bill.customer) return reply(400, { error: 'no_customer' });
-      const ses = await stripe(env, 'POST', 'billing_portal/sessions', { customer: bill.customer, return_url: withParam('billing', 'portal') });
-      return reply(200, { url: ses.url });
+    const tok = await googleToken(u.sa);
+    const root = rootDocs(u.sa, tok);
+    if (task === 'iap-token') {
+      if (!u.owner) return reply(403, { error: 'not_owner' });
+      const bill = (await u.db.get('config/billing')) || {};
+      let t = UUID_RE.test(String(bill.appleToken || '')) ? bill.appleToken : '';
+      if (!t) {
+        t = crypto.randomUUID();
+        await root.set('appleTokens/' + t, { teamId: u.teamId, owner: u.uid, at: Date.now() });
+        await u.db.patch('config/billing', { appleToken: t });
+      }
+      return reply(200, { appAccountToken: t, products: appleProducts(env), owns: bill.appleOtid ? { product: bill.appleProduct || '', plan: u.dir.plan || 'free' } : null });
     }
-    // billing-checkout
-    const plan = body.plan === 'elite' ? 'elite' : body.plan === 'pro' ? 'pro' : '';
-    const price = plan && priceFor(env, plan, body.interval);
-    if (!price) return reply(400, { error: 'billing_not_configured', detail: 'Missing Stripe price for ' + plan + ' ' + body.interval });
-    // A team that already pays changes plans in the billing portal (Stripe prorates it).
-    if (bill.subscription && ['active', 'trialing', 'past_due'].includes(bill.status)) return reply(409, { error: 'has_subscription' });
-    const p = {
-      mode: 'subscription', 'line_items[0][price]': price, 'line_items[0][quantity]': '1',
-      success_url: withParam('billing', 'done'), cancel_url: withParam('billing', 'cancel'),
-      client_reference_id: u.teamId, 'metadata[teamId]': u.teamId,
-      'subscription_data[metadata][teamId]': u.teamId, 'subscription_data[metadata][plan]': plan,
-      allow_promotion_codes: 'true'
-    };
-    if (bill.customer) p.customer = bill.customer;
-    else if (u.member && u.member.email) p.customer_email = String(u.member.email);
-    const ses = await stripe(env, 'POST', 'checkout/sessions', p);
-    return reply(200, { url: ses.url });
+    // iap-link
+    const list = (Array.isArray(body.transactions) ? body.transactions : []).slice(0, 10);
+    const results = [];
+    const seen = new Set();
+    for (const jws of list) {
+      const p = jwsPayload(jws);
+      if (!p || !p.transactionId || String(p.bundleId || '') !== String(env.APPLE_BUNDLE_ID).trim()) continue;
+      const otid = String(p.originalTransactionId || p.transactionId);
+      if (seen.has(otid)) continue;
+      seen.add(otid);
+      const sub = await appleSubscription(env, String(p.transactionId), p.environment);
+      if (!sub) continue;
+      let teamId = await appleTeamFor(root, sub);
+      // No token on the purchase and never linked: it belongs to the team whose owner sent it.
+      if (!teamId && u.owner) teamId = u.teamId;
+      if (!teamId) continue;
+      const linked = await root.get('appleSubs/' + sub.otid);
+      if (!linked || linked.teamId !== teamId) await root.set('appleSubs/' + sub.otid, { teamId, at: Date.now() });
+      const r = await applyApple(env, u.sa, tok, teamId, sub);
+      results.push({ teamId, plan: r.plan, active: sub.status === 1 || sub.status === 4, product: sub.tx.productId });
+    }
+    return reply(200, { results });
   } catch (e) {
     return reply(e.status || 502, { error: e.error || 'upstream', detail: e.detail || '' });
   }
 }
-// Verifies Stripe's signature, then updates the team's plan from the subscription Stripe has now.
-async function stripeWebhook(request, env) {
+// App Store Server Notifications V2 (renewals, upgrades, cancellations, refunds, expirations).
+// Address to give Apple: https://<your-worker>/apple-notifications
+async function appleNotification(request, env) {
   const ok = (status, msg) => new Response(JSON.stringify({ received: status === 200, msg }), { status, headers: { 'content-type': 'application/json' } });
-  if (!env.STRIPE_WEBHOOK_SECRET || !env.STRIPE_SECRET_KEY || !env.FIREBASE_SERVICE_ACCOUNT) return ok(500, 'not configured');
-  const raw = await request.text();
-  const sig = request.headers.get('stripe-signature') || '';
-  const parts = Object.fromEntries(sig.split(',').map((x) => x.split('=')).filter((x) => x.length === 2).map(([k, v]) => [k.trim(), v]));
-  const v1s = sig.split(',').filter((x) => x.trim().startsWith('v1=')).map((x) => x.trim().slice(3));
-  const t = Number(parts.t);
-  if (!t || !v1s.length || Math.abs(Date.now() / 1000 - t) > 300) return ok(400, 'bad signature');
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.STRIPE_WEBHOOK_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(t + '.' + raw)));
-  const hex = Array.from(mac, (b) => b.toString(16).padStart(2, '0')).join('');
-  if (!v1s.some((v) => sameText(v, hex))) return ok(400, 'bad signature');
-  let ev;
-  try { ev = JSON.parse(raw); } catch (e) { return ok(400, 'bad json'); }
-  const obj = (ev.data && ev.data.object) || {};
-  let subId = '', teamId = '';
-  if (ev.type === 'checkout.session.completed') { subId = obj.subscription; teamId = obj.client_reference_id || (obj.metadata && obj.metadata.teamId); }
-  else if (/^customer\.subscription\./.test(ev.type)) { subId = obj.id; teamId = obj.metadata && obj.metadata.teamId; }
-  else return ok(200, 'ignored');
-  teamId = cleanTeamId(teamId);
-  if (!subId || !teamId) return ok(200, 'no team');
+  if (!appleReady(env)) return ok(500, 'not configured');
+  const body = await request.json().catch(() => null);
+  const n = jwsPayload(body && body.signedPayload);
+  if (!n || !n.data) return ok(400, 'bad payload');
+  if (String(n.data.bundleId || '') !== String(env.APPLE_BUNDLE_ID).trim()) return ok(200, 'other app');
+  const tx = jwsPayload(n.data.signedTransactionInfo);
+  if (!tx || !tx.transactionId) return ok(200, 'ignored'); // TEST notifications and the like
   try {
-    // Always read the subscription fresh, so events arriving out of order can't leave a wrong plan.
-    const sub = await stripe(env, 'GET', 'subscriptions/' + subId);
-    await applySubscription(env, teamId, sub);
+    const sub = await appleSubscription(env, String(tx.transactionId), n.data.environment);
+    if (!sub) return ok(200, 'not ours');
+    const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
+    const tok = await googleToken(sa);
+    const root = rootDocs(sa, tok);
+    const teamId = await appleTeamFor(root, sub);
+    if (!teamId) return ok(200, 'no team yet'); // the app links it when the purchase finishes
+    await applyApple(env, sa, tok, teamId, sub);
     return ok(200, 'updated');
   } catch (e) {
-    return ok(500, 'update failed'); // Stripe retries
+    return ok(500, 'update failed'); // Apple retries
   }
 }
-async function applySubscription(env, teamId, sub) {
+// Deletes the signed-in user's account (App Store rule 5.1.1): their spot on every team, their
+// notification tokens and settings, their My Teams list, then the sign-in itself. Teams they own
+// stay, so the families on them keep their games and stats.
+async function accountDelete(request, env, reply) {
+  if (!env.FIREBASE_SERVICE_ACCOUNT) return reply(500, { error: 'not_configured' });
   const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
-  const db = firestore(sa.project_id, await googleToken(sa), teamId);
-  const item = (sub.items && sub.items.data && sub.items.data[0]) || {};
-  const found = planForPrice(env, item.price && item.price.id);
-  const live = ['active', 'trialing', 'past_due'].includes(sub.status);
-  const plan = live && found ? found.plan : 'free';
-  const end = Number(item.current_period_end || sub.current_period_end || 0) * 1000;
-  await db.patch('', { plan, planStatus: String(sub.status || ''), planInterval: live && found ? found.interval : '', planRenews: live ? end : 0, planCancels: !!sub.cancel_at_period_end, planUpdatedAt: Date.now() });
-  await db.patch('config/billing', { customer: String(sub.customer || ''), subscription: String(sub.id || ''), status: String(sub.status || ''), plan, updatedAt: Date.now() });
+  const m = /^Bearer\s+(\S+)$/.exec(request.headers.get('authorization') || '');
+  const uid = m && await verifyIdToken(m[1], sa.project_id);
+  if (!uid) return reply(401, { error: 'signed_out' });
+  try {
+    const tok = await googleToken(sa);
+    const root = rootDocs(sa, tok);
+    const mine = await root.list('users/' + encodeURIComponent(uid) + '/teams');
+    for (const t of mine.slice(0, 100)) {
+      const teamId = cleanTeamId(t._id);
+      if (!teamId) continue;
+      const db = firestore(sa.project_id, tok, teamId);
+      await db.del('members/' + uid);
+      await db.del('prefs/' + uid);
+      await db.del('guests/' + uid);
+      const toks = await db.list('pushTokens').catch(() => []);
+      for (const p of toks) if (p.uid === uid) await db.del('pushTokens/' + p._id);
+      await root.del('users/' + encodeURIComponent(uid) + '/teams/' + encodeURIComponent(t._id));
+    }
+    const r = await fetch('https://identitytoolkit.googleapis.com/v1/projects/' + sa.project_id + '/accounts:delete', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'content-type': 'application/json' }, body: JSON.stringify({ localId: uid }) });
+    if (!r.ok) return reply(502, { error: 'upstream', detail: 'Couldn’t delete the sign-in (' + r.status + ').' });
+    return reply(200, { ok: true });
+  } catch (e) {
+    return reply(502, { error: 'upstream' });
+  }
 }
 function eastern(now) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' }).formatToParts(now).map((x) => [x.type, x.value]));
@@ -717,16 +830,16 @@ async function notifyRun(env, self, site, teamId) {
   const items = [];
   for (const t of tokens) {
     if (!t.token || !ok.has(t.uid)) continue;
-    for (const a of annNew) if (a.uid !== t.uid) items.push({ id: t._id, token: t.token, title: '📣 ' + (a.name || 'Coach'), body: String(a.text || '').slice(0, 180), tag: 'ann-' + a._id, link: site + '/?team=' + encodeURIComponent(teamId) + '#news', icon });
+    for (const a of annNew) if (a.uid !== t.uid) items.push({ id: t._id, token: t.token, native: !!t.native, title: '📣 ' + (a.name || 'Coach'), body: String(a.text || '').slice(0, 180), tag: 'ann-' + a._id, link: site + '/?team=' + encodeURIComponent(teamId) + '#news', icon });
     if (chatNew.length && t.chat !== false) {
       const mute = muted.get(t.uid) || {};
       const see = chatNew.filter((m) => m.uid !== t.uid && !mute[m.uid]);
-      if (see.length <= 3) for (const m of see) items.push({ id: t._id, token: t.token, title: (m.name || 'Team chat') + (m.coach ? ' (Coach)' : ''), body: say(m, 160), tag: 'chat-' + m._id, link, icon });
-      else { const last = see[see.length - 1]; items.push({ id: t._id, token: t.token, title: see.length + ' new messages in team chat', body: (last.name || '') + ': ' + say(last, 120), tag: 'chat', link, icon }); }
+      if (see.length <= 3) for (const m of see) items.push({ id: t._id, token: t.token, native: !!t.native, title: (m.name || 'Team chat') + (m.coach ? ' (Coach)' : ''), body: say(m, 160), tag: 'chat-' + m._id, link, icon });
+      else { const last = see[see.length - 1]; items.push({ id: t._id, token: t.token, native: !!t.native, title: see.length + ' new messages in team chat', body: (last.name || '') + ': ' + say(last, 120), tag: 'chat', link, icon }); }
     }
     for (const n of out) {
       if (n.kind === 'score' && (t.scores === 'off' || (n.level === 'all' && t.scores !== 'all'))) continue;
-      items.push({ id: t._id, token: t.token, title: n.title, body: n.body, tag: n.tag, link: n.link, icon });
+      items.push({ id: t._id, token: t.token, native: !!t.native, title: n.title, body: n.body, tag: n.tag, link: n.link, icon });
     }
   }
   const INLINE = 30;
@@ -742,7 +855,10 @@ async function sendItems(pid, tok, items, db) {
   await Promise.all(items.map(async (it) => {
     const r = await fetch('https://fcm.googleapis.com/v1/projects/' + pid + '/messages:send', {
       method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'content-type': 'application/json' },
-      body: JSON.stringify({ message: { token: it.token, webpush: { headers: { Urgency: 'high', TTL: '3600' }, notification: { title: it.title, body: it.body, icon: it.icon, tag: it.tag, renotify: true }, fcm_options: { link: it.link } } } })
+      // iPhone app tokens get an Apple (APNs) notification; browser tokens get a web push.
+      body: JSON.stringify({ message: it.native
+        ? { token: it.token, notification: { title: it.title, body: it.body }, data: { link: String(it.link || '') }, apns: { headers: { 'apns-priority': '10', 'apns-collapse-id': String(it.tag || '').slice(0, 64) }, payload: { aps: { sound: 'default', 'thread-id': String(it.tag || '').split('-')[0] } } } }
+        : { token: it.token, webpush: { headers: { Urgency: 'high', TTL: '3600' }, notification: { title: it.title, body: it.body, icon: it.icon, tag: it.tag, renotify: true }, fcm_options: { link: it.link } } } })
     }).catch(() => null);
     if (r && (r.status === 404 || r.status === 400)) { const t = await r.text().catch(() => ''); if (/UNREGISTERED|registration-token-not-registered|not a valid FCM registration token/i.test(t)) gone.push(it.id); }
   }));

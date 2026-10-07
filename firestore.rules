@@ -55,7 +55,7 @@ service cloud.firestore {
           && d.get('logoURL', '') is string && d.get('logoURL', '').size() <= 1000;
       }
 
-      // The paid-plan fields. Only the Worker (Stripe payments) or the app owner in the Firebase
+      // The paid-plan fields. Only the Worker (Apple in-app purchases) or the app owner in the Firebase
       // console sets them; no one can give their own team a plan from the app.
       function planKeys() { return ['active', 'plan', 'planStatus', 'planInterval', 'planRenews', 'planCancels', 'planUpdatedAt']; }
 
@@ -79,7 +79,7 @@ service cloud.firestore {
           && exists(teamPath()) && get(teamPath()).data.owner == request.auth.uid;
       }
   
-      // Stripe customer and subscription for the team's plan. Written only by the Worker; the owner can read it.
+      // The team's Apple subscription for its plan. Written only by the Worker; the owner can read it.
       match /config/billing {
         allow read: if isOwner();
       }
@@ -175,11 +175,11 @@ service cloud.firestore {
         allow get: if signedIn() && resource.data.uid == request.auth.uid;
         allow create: if (isApproved() || isAdmin())
           && request.resource.data.uid == request.auth.uid
-          && request.resource.data.keys().hasOnly(['uid', 'token', 'chat', 'scores', 'at'])
+          && request.resource.data.keys().hasOnly(['uid', 'token', 'chat', 'scores', 'at', 'native'])
           && request.resource.data.scores in ['off', 'runs', 'all'];
         allow update: if (isApproved() || isAdmin()) && resource.data.uid == request.auth.uid
           && request.resource.data.uid == request.auth.uid
-          && request.resource.data.keys().hasOnly(['uid', 'token', 'chat', 'scores', 'at'])
+          && request.resource.data.keys().hasOnly(['uid', 'token', 'chat', 'scores', 'at', 'native'])
           && request.resource.data.scores in ['off', 'runs', 'all'];
         allow delete: if signedIn() && resource.data.uid == request.auth.uid;
       }
