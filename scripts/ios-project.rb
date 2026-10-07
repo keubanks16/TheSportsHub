@@ -15,12 +15,8 @@ unless target.resources_build_phase.files_references.any? { |f| f && f.path && f
   target.add_resources([ref])
 end
 
-(target.build_configurations + proj.build_configurations).each do |c|
+target.build_configurations.each do |c|
   s = c.build_settings
-  # App Store builds sign with a distribution profile, which needs no registered devices.
-  s.keys.grep(/\ACODE_SIGN_IDENTITY/).each { |k| s.delete(k) }
-  s['CODE_SIGN_IDENTITY'] = c.name == 'Release' ? 'Apple Distribution' : 'Apple Development'
-  next unless target.build_configurations.include?(c)
   s['CODE_SIGN_ENTITLEMENTS'] = 'App/App.entitlements'
   s['TARGETED_DEVICE_FAMILY'] = '1'
   s['CODE_SIGN_STYLE'] = 'Automatic'

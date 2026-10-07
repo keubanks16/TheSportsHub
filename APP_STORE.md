@@ -21,7 +21,8 @@ Bundle ID used everywhere below: **`com.kollinmeubanks.thesportshub`** (change i
    - Bundle ID (explicit): `com.kollinmeubanks.thesportshub`
    - Capabilities: tick **Push Notifications** (In-App Purchase is on by default).
 4. **Keys → +**: name it "APNs", tick **Apple Push Notifications service (APNs)**, download the `.p8` and note its Key ID. (Firebase needs this in step 3.)
-5. App Store Connect → **Business**: sign the Paid Apps agreement and add banking and tax info. Purchases don't work, even in testing, until this is active.
+5. **Devices → +**: register one iPhone (yours) by its UDID. Xcode's automatic signing needs at least one device on the team before it will sign a build, even for the App Store. To find the UDID: on a Mac, plug the iPhone in and click its serial number in Finder; or on the iPhone, open udid.tech in Safari and follow its steps.
+6. App Store Connect → **Business**: sign the Paid Apps agreement and add banking and tax info. Purchases don't work, even in testing, until this is active.
 
 ## 2. App Store Connect app record
 
