@@ -155,6 +155,11 @@ service cloud.firestore {
         allow write: if isAdmin();
         allow create, update: if isScorer();
       }
+      // Practice schedule (Practice tab): everyone on the team sees it; coaches add and change it.
+      match /practices/{id} {
+        allow read: if canView();
+        allow write: if isAdmin();
+      }
       // Phones that asked for notifications. Each person manages only their own; the Worker reads
       // them with the service account.
       match /pushTokens/{id} {

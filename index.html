@@ -6978,7 +6978,7 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
       document.title = (Data.team.name || APP_NAME) + (Data.team.name && Data.team.name !== APP_NAME ? ' | ' + APP_NAME : '');
       dirSync();
       maybeReady();
-    }, onDbError));
+    }, (e) => { Data.loaded.team = true; maybeReady(); onDbError(e, 'team'); }));
     subs.push(db.collection('games').onSnapshot((snap) => {
       const next = {};
       for (const doc of snap.docs) if (doc.exists) next[doc.id] = normGame(clone(doc.data()));
@@ -6987,12 +6987,12 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
       Data.games = next;
       Data.loaded.games = true;
       maybeReady();
-    }, onDbError));
+    }, (e) => { Data.loaded.games = true; maybeReady(); onDbError(e, 'games'); }));
     subs.push(db.collection('practices').onSnapshot((snap) => {
       const next={}; for(const doc of snap.docs) if(doc.exists&&!Saver.deleting.has('practices/'+doc.id)) next[doc.id]=Object.assign({id:doc.id},clone(doc.data()));
       for(const id in Data.practices) if(Saver.busy('practices/'+id)) next[id]=Data.practices[id];
       Data.practices=next; Data.loaded.practices=true; scheduleRender();
-    }, onDbError));
+    }, (e) => { Data.loaded.practices = true; onDbError(e, 'practices'); }));
     subs.push(db.collection('opponents').onSnapshot((snap) => {
       const next = {};
       for (const doc of snap.docs) if (doc.exists && !Saver.deleting.has('opponents/' + doc.id)) next[doc.id] = normRoster(clone(doc.data()));
@@ -7000,14 +7000,22 @@ window.HUB_CONFIG = { appName: 'The Hub', workerUrl: 'https://thesportshub.kolli
       Data.opponents = next;
       Data.loaded.opps = true;
       maybeReady();
-    }, onDbError));
+    }, (e) => { Data.loaded.opps = true; maybeReady(); onDbError(e, 'opponents'); }));
     return subs;
   }
-  function onDbError(err) {
+  // Load problems: logged for the developer, and at most one plain message per visit. Families never
+  // see setup wording; only coaches hear about a database setting, and only when the games themselves
+  // can't load (an extra like the practice schedule failing stays quiet).
+  function onDbError(err, what) {
+    console.warn('Load problem' + (what ? ' (' + what + ')' : ''), err);
+    if (onDbError.shown) return;
+    const core = !what || what === 'team' || what === 'games';
     if (err && err.code === 'permission_denied') {
-      if (Backend.kind === 'fb' && Access.canView) toast("Games couldn't load. Check that the security rules are published in Firebase.");
-    } else if (err && err.code === 'revoked') toast('Access to this team changed. Reload to continue.');
-    else toast('Live updates paused. Reload the page to reconnect.');
+      if (!core || !(Backend.kind === 'fb' && Access.isAdmin)) return;
+      onDbError.shown = true;
+      toast('Some team data couldn\u2019t load. If this keeps happening, publish the latest firestore.rules in Firebase.');
+    } else if (err && err.code === 'revoked') { onDbError.shown = true; toast('Access to this team changed. Reload to continue.'); }
+    else if (core) { onDbError.shown = true; toast('Live updates paused. Reload the page to reconnect.'); }
   }
   // Puts back changes made on this phone that never reached the server (the app was closed or
   // restarted with no signal). A copy only wins if it's newer than what the server has.
