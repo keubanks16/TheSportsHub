@@ -1235,7 +1235,7 @@ body.viewer-on { overflow: hidden; }
   function todayISO(when) { const d = when || new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 
   // ---------- data ----------
-  const defaultTeam = () => ({ name: 'The Hub', pitchLimit: 105, innings: 7, primaryColor: '#0B2753', secondaryColor: '#6DA0D6', logoURL: '', players: [] });
+  const defaultTeam = () => ({ name: 'The Hub', pitchLimit: 105, innings: 7, primaryColor: '#0B2753', secondaryColor: '#6DA0D6', baseColor: '#04122D', logoURL: '', players: [] });
   function normTeam(t) { const n = Object.assign(defaultTeam(), t || {}); n.players = Array.isArray(n.players) ? n.players : []; n.extraWork = n.extraWork && typeof n.extraWork === 'object' ? n.extraWork : {}; return n; }
   function normGame(g) {
     g.events = Array.isArray(g.events) ? g.events : [];
@@ -1269,6 +1269,7 @@ body.viewer-on { overflow: hidden; }
     const team = t || {};
     const primary = /^#[0-9a-f]{6}$/i.test(team.primaryColor || '') ? team.primaryColor : '#0B2753';
     const secondary = /^#[0-9a-f]{6}$/i.test(team.secondaryColor || '') ? team.secondaryColor : '#6DA0D6';
+    const base = /^#[0-9a-f]{6}$/i.test(team.baseColor || '') ? team.baseColor : '#04122D';
     const r = document.documentElement.style;
     // Team branding: primary controls the main team surfaces; secondary controls accents/actions.
     // Keep these roles separate so changing one color never silently substitutes for the other.
@@ -1276,6 +1277,19 @@ body.viewer-on { overflow: hidden; }
       const n = parseInt(hex.slice(1), 16), rr = (n >> 16) & 255, gg = (n >> 8) & 255, bb = n & 255;
       return ((rr * 299 + gg * 587 + bb * 114) / 1000) > 155 ? '#04122D' : '#FFFFFF';
     };
+    const mix = (hex, toward, amount) => {
+      const a = parseInt(hex.slice(1),16), b = parseInt(toward.slice(1),16);
+      const ch = sh => Math.round(((a>>sh)&255)*(1-amount) + ((b>>sh)&255)*amount);
+      return '#' + [16,8,0].map(sh => ch(sh).toString(16).padStart(2,'0')).join('');
+    };
+    // Base color owns the app background/cards/navigation surfaces.
+    r.setProperty('--ground', mix(base, '#000000', .18));
+    r.setProperty('--surface', mix(base, '#FFFFFF', .055));
+    r.setProperty('--surface-2', mix(base, '#FFFFFF', .10));
+    r.setProperty('--line', mix(base, '#FFFFFF', .20));
+    r.setProperty('--ink', inkFor(base));
+    r.setProperty('--ink-2', mix(inkFor(base), base, .32));
+    r.setProperty('--ink-3', mix(inkFor(base), base, .50));
     r.setProperty('--navy', primary);
     r.setProperty('--board', primary);
     r.setProperty('--c1', primary);
@@ -1649,7 +1663,7 @@ body.viewer-on { overflow: hidden; }
       }
     } else if (!X.user || anon) {
       body = 'Sign in to follow games, box scores and stats. New families can create an account, and a coach approves access.';
-      actions = '<button class="btn primary" data-act="authOpen" data-mode="signin">Sign in</button><button class="btn" data-act="authOpen" data-mode="signup">Create Account</button>';
+      actions = '<button class="btn primary" data-act="authOpen" data-mode="signin">Sign in</button><button class="btn" data-act="authOpen" data-mode="signup">Create Family Account</button><button class="btn" data-act="createTeam">Create a Team</button>';
     } else if (X.member && X.member.status === 'pending') {
       body = `Thanks${name ? ', ' + name : ''}. A coach needs to approve your account before you can see games. This page opens up as soon as they do.`;
       actions = '<button class="btn" data-act="signOut">Sign out</button>';
@@ -4332,6 +4346,7 @@ body.viewer-on { overflow: hidden; }
       return head('Team settings') + `<label><span class="field-lbl">Team name</span>${inp('f.name', sh.f.name)}</label>
         <label><span class="field-lbl">Logo URL</span>${inp('f.logoURL', sh.f.logoURL, 'placeholder="https://..." inputmode="url"')}</label><button type="button" class="btn" data-act="uploadTeamLogo">Upload Logo</button><div class="hint">Choose a logo from your phone. The Hub uploads and saves it automatically.</div>
         <div class="grid2"><label><span class="field-lbl">Primary color</span>${inp('f.primaryColor', sh.f.primaryColor, 'type="color"')}</label><label><span class="field-lbl">Secondary color</span>${inp('f.secondaryColor', sh.f.secondaryColor, 'type="color"')}</label></div>
+        <label><span class="field-lbl">Base / background color</span>${inp('f.baseColor', sh.f.baseColor || '#04122D', 'type="color"')}</label>
         <div class="grid2"><label><span class="field-lbl">Pitch limit</span>${inp('f.pitchLimit', sh.f.pitchLimit, 'type="number" min="0" inputmode="numeric"')}</label><label><span class="field-lbl">Innings per game</span>${inp('f.innings', sh.f.innings, 'type="number" min="1" max="12" inputmode="numeric"')}</label></div>
         <p class="small muted" style="margin:0">The live screen warns as your pitcher nears the limit. Set it to 0 to turn the warning off.</p>
         <div class="row"><button class="btn primary" data-act="saveTeamEdit">Save</button><button class="btn" data-act="close">Cancel</button></div>`;
@@ -5674,7 +5689,7 @@ body.viewer-on { overflow: hidden; }
         toast(e && e.code === 'permission-denied' ? 'Couldn\u2019t delete. Check that the latest security rules are published.' : 'Couldn\u2019t delete that message. Check your connection and try again.');
       }
     },
-    authOpen(d) { openSheet({ type: 'auth', mode: d.mode || 'signin', name: '', email: '', password: '', note: '' }); },
+    authOpen(d) { openSheet({ type: 'auth', mode: d.mode || 'signin', name: '', email: '', password: '', note: '', after: d.after || '' }); },
     authMode(d) { const sh = UI.sheet; sh.mode = d.mode; sh.err = ''; sh.msg = ''; renderSheet(); },
     async authSubmit() {
       const sh = UI.sheet;
@@ -5682,7 +5697,7 @@ body.viewer-on { overflow: hidden; }
       const email = String(sh.email || '').trim(), pw = String(sh.password || ''), name = String(sh.name || '').trim(), note = String(sh.note || '').trim().slice(0, 80);
       if (!email) { sh.err = 'Enter your email.'; return renderSheet(); }
       if (sh.mode !== 'reset' && !pw) { sh.err = 'Enter a password.'; return renderSheet(); }
-      if ((sh.mode === 'signup' || sh.mode === 'setup') && !name) { sh.err = 'Enter your name.'; return renderSheet(); }
+      if ((sh.mode === 'signup' || sh.mode === 'setup' || sh.mode === 'account') && !name) { sh.err = 'Enter your name.'; return renderSheet(); }
       sh.busy = true; sh.err = ''; sh.msg = ''; renderSheet();
       try {
         if (sh.mode === 'signin') {
@@ -5701,8 +5716,10 @@ body.viewer-on { overflow: hidden; }
         if (sh.mode === 'setup') await claimAdmin(name, email);
         else if (sh.mode === 'signup') await FB.F.setDoc(teamDoc('members', cred.user.uid), { name, email, note, role: 'parent', status: 'pending', createdAt: Date.now() });
         // account mode creates only the user's Firebase account; team membership comes next.
+        const after = sh.after;
         if (UI.sheet === sh) closeSheet();
         toast(sh.mode === 'setup' ? 'Admin account ready' : sh.mode === 'account' ? 'Account created' : 'Request sent to the coaches');
+        if (sh.mode === 'account' && after === 'createTeam') return A.createTeam();
       } catch (e) {
         sh.busy = false;
         sh.err = e && e.code === 'already-claimed' ? 'This hub already has an admin. Sign in instead.' : authErrorText(e);
@@ -5787,12 +5804,13 @@ body.viewer-on { overflow: hidden; }
     videoClear() { Data.team.video = ''; saveTeam(); closeSheet(); render(); toast('Live video removed'); },
     videoDelay(d) { setVideoPrefs({ delay: +d.v }); delayTick = -1; render(); },
     coachVideo() { setVideoPrefs({ coachShow: !videoPrefs().coachShow }); render(); },
-    teamEdit() { const t = Data.team; openSheet({ type: 'teamEdit', f: { name: t.name, pitchLimit: t.pitchLimit, innings: t.innings, primaryColor: t.primaryColor || '#0B2753', secondaryColor: t.secondaryColor || '#6DA0D6', logoURL: t.logoURL || '' } }); },
+    teamEdit() { const t = Data.team; openSheet({ type: 'teamEdit', f: { name: t.name, pitchLimit: t.pitchLimit, innings: t.innings, primaryColor: t.primaryColor || '#0B2753', secondaryColor: t.secondaryColor || '#6DA0D6', baseColor: t.baseColor || '#04122D', logoURL: t.logoURL || '' } }); },
     saveTeamEdit() {
       const f = UI.sheet.f;
       Data.team.name = String(f.name).trim() || 'The Hub';
       Data.team.primaryColor = /^#[0-9a-f]{6}$/i.test(String(f.primaryColor || '')) ? String(f.primaryColor) : '#0B2753';
       Data.team.secondaryColor = /^#[0-9a-f]{6}$/i.test(String(f.secondaryColor || '')) ? String(f.secondaryColor) : '#6DA0D6';
+      Data.team.baseColor = /^#[0-9a-f]{6}$/i.test(String(f.baseColor || '')) ? String(f.baseColor) : '#04122D';
       Data.team.logoURL = String(f.logoURL || '').trim().slice(0, 1000);
       applyTeamBrand(Data.team);
       Data.team.pitchLimit = Math.max(0, parseInt(f.pitchLimit, 10) || 0);
@@ -6309,7 +6327,7 @@ body.viewer-on { overflow: hidden; }
     },
     async createTeam() {
       const u = FB.auth && FB.auth.currentUser;
-      if (!u || u.isAnonymous) return A.authOpen({ mode: 'account' });
+      if (!u || u.isAnonymous) return A.authOpen({ mode: 'account', after: 'createTeam' });
       const teamName = String(prompt('Team name', '') || '').trim();
       if (!teamName) return;
       const suggested = cleanTeamId(teamName);
