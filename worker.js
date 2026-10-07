@@ -35,7 +35,7 @@
 //   App Store Server Notifications V2 address to give Apple: https://<your-worker>/apple-notifications
 //   TEAM_IDS           Text    optional; teams are found automatically. Only needed for very old teams.
 //   MODEL              Text    optional; defaults to claude-sonnet-5-5
-//   APP_NAME           Text    optional; your app's name in notifications (defaults to The Hub)
+//   APP_NAME           Text    optional; your app's name in notifications (defaults to The Sports Hub)
 
 const DEFAULT_ORIGIN = 'http://localhost:8080';
 const DEFAULT_MODEL = 'claude-sonnet-5-5';
@@ -818,7 +818,7 @@ async function notifyRun(env, self, site, teamId) {
     if (first) continue;
     const L = line(g, sum), link = site + '/?team=' + encodeURIComponent(teamId) + '#live', tag = 'game-' + g._id;
     const where = (sum.half ? 'Bottom ' : 'Top ') + ORDN(sum.i);
-    if (!prev) { out.push({ kind: 'score', level: 'runs', title: teamName + (g.home ? ' vs ' : ' at ') + (g.opponent || 'Opponent') + ' is underway', body: 'Follow it live in ' + (env.APP_NAME || 'The Hub') + '.', tag, link }); continue; }
+    if (!prev) { out.push({ kind: 'score', level: 'runs', title: teamName + (g.home ? ' vs ' : ' at ') + (g.opponent || 'Opponent') + ' is underway', body: 'Follow it live in ' + (env.APP_NAME || 'The Sports Hub') + '.', tag, link }); continue; }
     const runs = prev.a !== sum.a || prev.h !== sum.h;
     const turned = prev.i !== sum.i || prev.half !== sum.half;
     if (runs) out.push({ kind: 'score', level: 'runs', title: 'Run scores! ' + L.text, body: turned ? (sum.half ? 'Middle of the ' + ORDN(sum.i) : 'End of the ' + ORDN(sum.i - 1)) : where + ', ' + (sum.o || 0) + ' out' + (sum.o === 1 ? '' : 's'), tag, link });

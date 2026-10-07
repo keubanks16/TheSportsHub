@@ -2,7 +2,7 @@
   "name": "thesportshub",
   "private": true,
   "version": "1.0.0",
-  "description": "The Hub: team app for youth baseball and softball (website + iPhone app)",
+  "description": "The Sports Hub: team app for youth baseball and softball (website + iPhone app)",
   "type": "module",
   "scripts": {
     "build:www": "node scripts/build-www.mjs",

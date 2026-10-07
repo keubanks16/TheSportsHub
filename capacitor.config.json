@@ -1,8 +1,8 @@
 {
   "appId": "com.kollinmeubanks.thesportshub",
-  "appName": "The Hub",
+  "appName": "Sports Hub",
   "webDir": "www",
-  "backgroundColor": "#020308",
+  "backgroundColor": "#050D1A",
   "ios": {
     "contentInset": "never",
     "limitsNavigationsToAppBoundDomains": false
@@ -16,7 +16,7 @@
     },
     "SplashScreen": {
       "launchAutoHide": true,
-      "backgroundColor": "#020308"
+      "backgroundColor": "#050D1A"
     }
   }
 }
