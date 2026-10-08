@@ -7210,10 +7210,13 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
         // One Apple ID can hold one plan at a time. If it's on another team, say so instead of moving it.
         const have = await P.getPurchases({ productType: 'subs' }).catch(() => ({ purchases: [] }));
         const other = (have.purchases || []).find((x) => x.isActive && x.appAccountToken && String(x.appAccountToken).toLowerCase() !== st.token && Object.values(st.ids).includes(x.productIdentifier));
-        if (other) throw { msg: 'Your Apple ID already pays for a plan on another team. Cancel it in Manage subscription first, or buy this team’s plan with a different Apple ID.' };
+        if (other) throw { msg: 'Your Apple ID already has a plan on another team, and one Apple ID can pay for one team at a time. Once that plan ends (cancel it in Manage subscription and it ends after the time you paid for), you can buy one here. Or buy this team’s plan with a different Apple ID.' };
         const tx = await P.purchaseProduct({ productIdentifier: pid, productType: 'subs', quantity: 1, appAccountToken: st.token });
         const r = await iapLink([tx && tx.jwsRepresentation]);
-        toast(r ? 'Thanks! ' + PLANS[d.plan].name + ' is on for ' + teamTitle() + '.' : 'Thanks! Your plan turns on in a few seconds.');
+        const mine = r && r.find((x) => x.teamId === TEAM_ID);
+        // A move to a lower plan (Elite to Pro) starts at the next renewal; the team keeps Elite until then.
+        if (mine && mine.active && mine.plan && mine.plan !== d.plan) toast('Done. ' + teamTitle() + ' keeps ' + PLANS[mine.plan].name + ' until the next renewal, then switches to ' + PLANS[d.plan].name + '.');
+        else toast(r ? 'Thanks! ' + PLANS[d.plan].name + ' is on for ' + teamTitle() + '.' : 'Thanks! Your plan turns on in a few seconds.');
         if (UI.sheet === sh) closeSheet();
         render();
         return;
