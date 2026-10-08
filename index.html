@@ -1499,6 +1499,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
 
   // ---------- Firebase: logins, roles and cloud sync (website copy) ----------
   const FB_VERSION = '12.19.0';
+  const MEM_CACHE_KEY = 'hub-mem-cache';
   const FB = { A: null, F: null, auth: null, fs: null, app: null, cfg: null };
   const Access = { evaluated: false, authKnown: false, setupLoaded: false, accessLoaded: false, memberLoaded: true, guestLoaded: true, guest: null, guestInvite: null, isGuest: false, guestErr: '', claiming: false, rulesError: false, user: null, member: null, owner: null, publicView: false, members: [], isOwner: false, isApproved: false, isAdmin: false, isCamera: false, canView: false, worker: null };
   let WorkerSub = null;
@@ -1757,10 +1758,20 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
     import(base + 'firebase-storage.js').then((m) => { FB.S = m; FB.storage = m.getStorage(app); }).catch(() => {});
     // In the iPhone app, getAuth() waits on a web sign-in popup frame that never loads, so set up
     // auth directly with on-device storage.
-    FB.auth = NATIVE ? FB.A.initializeAuth(app, { persistence: [FB.A.indexedDBLocalPersistence, FB.A.browserLocalPersistence] }) : FB.A.getAuth(app);
+    FB.auth = NATIVE ? FB.A.initializeAuth(app, { persistence: [FB.A.browserLocalPersistence, FB.A.indexedDBLocalPersistence] }) : FB.A.getAuth(app);
     if (NATIVE) pushNativeInit();
-    try { FB.fs = FB.F.initializeFirestore(app, { localCache: FB.F.persistentLocalCache({ tabManager: FB.F.persistentMultipleTabManager() }) }); }
-    catch (e) { FB.fs = FB.F.getFirestore(app); }
+    // Offline cache. On iPhone, the cache's IndexedDB lock from the previous page can outlive a page
+    // restart (sign in, sign out, joining or switching teams) and freeze every listener on
+    // "Loading your team…" until the app is killed. The iPhone app is only ever one page, so it
+    // takes the lock outright (forceOwnership). If loading still stalls, the watchdog reloads once
+    // with no offline cache at all (memory only) for the rest of this session.
+    let cacheMode = NATIVE ? 'single' : 'multi';
+    try { if (sessionStorage.getItem(MEM_CACHE_KEY)) cacheMode = 'memory'; } catch (e) { /* default */ }
+    try {
+      const localCache = cacheMode === 'memory' ? FB.F.memoryLocalCache()
+        : FB.F.persistentLocalCache({ tabManager: cacheMode === 'single' ? FB.F.persistentSingleTabManager({ forceOwnership: true }) : FB.F.persistentMultipleTabManager() });
+      FB.fs = FB.F.initializeFirestore(app, { localCache });
+    } catch (e) { FB.fs = FB.F.getFirestore(app); }
     Backend.kind = 'fb';
     Backend.db = fsAdapter(FB.F, FB.fs);
     const rulesProblem = () => { Access.rulesError = true; };
@@ -1950,7 +1961,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       body = `Sign in to follow ${teamName}: games, box scores and stats. New families create an account and a coach approves it.`;
       actions = '<button class="btn primary" data-act="authOpen" data-mode="signin">Sign in</button><button class="btn" data-act="authOpen" data-mode="signup">Create account</button>';
     } else if (X.member && X.member.status === 'pending') {
-      body = `Thanks${first ? ', ' + first : ''}. A coach of ${teamName} needs to approve your account before you can see games. This page opens up as soon as they do.`;
+      body = `<b style="display:block;font-size:20px;margin-bottom:6px">⏳ Waiting for a coach to approve you</b>Thanks${first ? ', ' + first : ''}. Your request to join ${teamName} was sent. A coach needs to approve it before you can see games and chat. This page opens up on its own as soon as they do.`;
       actions = teamsBtn + '<button class="btn ghost" data-act="signOut">Sign out</button>';
     } else if (X.member && X.member.status === 'denied') {
       body = `Your request to join ${teamName} wasn’t approved. If that’s a mistake, talk to a coach.`;
@@ -7587,8 +7598,8 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
     }
     if (n) { scheduleRender(); toast(n === 1 ? 'Picked up a change that hadn\u2019t synced yet.' : 'Picked up ' + n + ' changes that hadn\u2019t synced yet.'); }
   }
-  // Safety net: if the team is still loading after 12 seconds while online, reload once.
-  // (sessionStorage stops it from reloading over and over if something else is wrong.)
+  // Safety net: if the team is still loading after 8 seconds while online, the offline cache is
+  // probably locked. Reload once without it (see bootFirebase). sessionStorage keeps it to one try.
   let LoadingTimer = null;
   function loadingWatchdog() {
     if (LoadingTimer || Backend.kind !== 'fb') return;
@@ -7596,14 +7607,13 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       LoadingTimer = null;
       if (UI.ready || navigator.onLine === false) return;
       if (Access.evaluated && !Access.canView) return;
-      try { if (sessionStorage.getItem('hub-load-retry')) return; sessionStorage.setItem('hub-load-retry', '1'); } catch (e) { return; }
+      try { if (sessionStorage.getItem(MEM_CACHE_KEY)) return; sessionStorage.setItem(MEM_CACHE_KEY, '1'); } catch (e) { return; }
       location.reload();
-    }, 12000);
+    }, 8000);
   }
   function maybeReady() {
     if (Data.loaded.team && Data.loaded.games && Data.loaded.opps) {
       UI.ready = true;
-      try { sessionStorage.removeItem('hub-load-retry'); } catch (e) { /* fine */ }
     }
     if (UI.ready && Backend.kind === 'fb' && Access.evaluated && !restoreUnsynced.done) { restoreUnsynced.done = true; restoreUnsynced(); }
     scheduleRender();
