@@ -67,6 +67,20 @@ async function main() {
     info.push({ g, subs });
     log('- Group "' + g.attributes.referenceName + '": ' + subs.map((s) => s.attributes.productId + ' [' + s.attributes.state + ', level ' + s.attributes.groupLevel + ']').join(', '));
   }
+  if (cfg.mode === 'verify') {
+    log('\n## Every plan');
+    log('| Product | State | Sold in | US price | Name | Review screenshot |\n| --- | --- | --- | --- | --- | --- |');
+    for (const { subs } of info) for (const s of subs) {
+      let where = '?', usd = '-', shot = 'no', name = '-';
+      try { const a = await api('GET', '/v1/subscriptions/' + s.id + '/subscriptionAvailability?include=availableTerritories&limit[availableTerritories]=50'); const t = (a.data.relationships.availableTerritories.data || []).map((x) => x.id); where = t.length > 5 ? t.length + ' countries' : t.join(', ') || 'none'; } catch (e) { where = 'not set'; }
+      try { const p = await all('/v1/subscriptions/' + s.id + '/prices?filter[territory]=USA&include=subscriptionPricePoint&limit=50'); const pp = p.included.find((x) => x.type === 'subscriptionPricePoints'); if (pp) usd = '$' + pp.attributes.customerPrice; } catch (e) { /* none */ }
+      try { if ((await api('GET', '/v1/subscriptions/' + s.id + '/appStoreReviewScreenshot')).data) shot = 'yes'; } catch (e) { /* none */ }
+      try { name = (await all('/v1/subscriptions/' + s.id + '/subscriptionLocalizations?limit=50')).data.map((l) => l.attributes.name).join(', ') || '-'; } catch (e) { /* none */ }
+      log('| ' + s.attributes.productId + ' | ' + s.attributes.state + ' | ' + where + ' | ' + usd + ' | ' + name + ' | ' + shot + ' |');
+    }
+    log('\nAPI calls: ' + calls);
+    return;
+  }
   const first = info.find((x) => x.subs.some((s) => s.attributes.productId === BUNDLE + '.pro.monthly'));
   if (!first) throw new Error('Could not find the first group (with ' + BUNDLE + '.pro.monthly)');
 

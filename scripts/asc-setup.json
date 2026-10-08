@@ -1,1 +1,1 @@
-{ "mode": "apply", "slots": 5, "only": ["USA"] }
+{ "mode": "verify", "slots": 5, "only": ["USA"] }
