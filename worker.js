@@ -10,7 +10,6 @@
 //   photos  team chat photos: store them in R2, hand out short-lived viewing links, delete them.
 //           Only signed-in, approved members can send or see them.
 //   fees    tournament fee reminder notifications to families who haven't paid yet.
-//   account-delete  deletes the signed-in person's account and their data (App Store requirement).
 //
 // Set these in the Worker's Settings -> Variables and Secrets:
 //   ACCESS_CODE        Secret  any passphrase you make up. Optional for coaches: signed-in team coaches
@@ -22,11 +21,18 @@
 // and under Settings -> Bindings add an R2 bucket with the variable name PHOTOS (chat photos),
 // and under Settings -> Triggers add a Cron Trigger that runs every minute (* * * * *).
 //   ALLOWED_ORIGIN     Text    REQUIRED: your app's address(es), comma separated, e.g. https://app.example.com
-//   Paid plans (Free / Pro / Elite, per team). Subscriptions are sold through Apple In-App Purchase;
-//   a team's plan is teams/{id}.plan (set by the app owner in the Firebase console until the
-//   App Store purchase hookup writes it).
+//   Paid plans (Free / Pro / Elite, per team) through Apple in-app purchases (see APP_STORE.md):
+//   APPLE_BUNDLE_ID          Text    the iPhone app's bundle ID, e.g. com.kollinmeubanks.thesportshub
+//   APPLE_ISSUER_ID          Text    App Store Connect -> Users and Access -> Integrations -> In-App Purchase -> Issuer ID
+//   APPLE_KEY_ID             Text    the In-App Purchase key's Key ID
+//   APPLE_PRIVATE_KEY        Secret  the whole .p8 file of that In-App Purchase key
+//   APPLE_PRODUCT_PRO_MONTH, APPLE_PRODUCT_PRO_YEAR, APPLE_PRODUCT_ELITE_MONTH, APPLE_PRODUCT_ELITE_YEAR
+//                            Text    optional; product IDs default to <bundle id>.pro.monthly, .pro.yearly,
+//                                    .elite.monthly and .elite.yearly
+//   APPLE_SANDBOX            Text    optional; "off" = TestFlight/sandbox purchases don't turn plans on
 //   PLANS                    Text    optional; "off" = every team gets everything (no plans)
 //   COMP_TEAMS               Text    optional; comma-separated team codes that always get Elite (your own teams)
+//   App Store Server Notifications V2 address to give Apple: https://<your-worker>/apple-notifications
 //   TEAM_IDS           Text    optional; teams are found automatically. Only needed for very old teams.
 //   MODEL              Text    optional; defaults to claude-sonnet-5-5
 //   APP_NAME           Text    optional; your app's name in notifications (defaults to The Sports Hub)
@@ -41,6 +47,7 @@ const MAX_IMAGE_B64 = 6000000; // about 4.5 MB per image
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const PHOTO_TASKS = ['photo-urls', 'photo-delete'];
 const PAY_TASKS = ['fee-remind'];
+const BILLING_TASKS = ['iap-token', 'iap-link'];
 // ---------- Plans ----------
 // Which plan each server-side feature needs. The team's plan is teams/{id}.plan, written only here.
 const PLAN_ORDER = ['free', 'pro', 'elite'];
@@ -78,6 +85,8 @@ export default {
       return new Response('{}', { headers: { 'content-type': 'application/json' } });
     }
     const here = new URL(request.url);
+    // Apple tells us about renewals, cancellations and refunds here (no browser involved).
+    if (request.method === 'POST' && here.pathname === '/apple-notifications') return appleNotification(request, env);
     // Chat photos are shown with plain <img> links, so they're checked by a signature, not a sign-in.
     if (request.method === 'GET' && here.pathname.startsWith('/p/')) return photoServe(here, env);
     const origin = request.headers.get('Origin') || '';
@@ -111,7 +120,9 @@ export default {
     // Team members prove who they are with their Hub sign-in, not the coaches' access code.
     if (PHOTO_TASKS.includes(task)) return photoTask(task, request, body, env, reply, ctx, here.origin, allowed[0]);
     if (PAY_TASKS.includes(task)) return payTask(task, request, body, env, reply, allowed);
-    if (task === 'account-delete') return accountDelete(request, body, env, reply);
+    if (BILLING_TASKS.includes(task)) return billingTask(task, request, body, env, reply);
+    if (task === 'account-delete') return accountDelete(request, env, reply);
+    if (task === 'push-test') return pushTest(request, env, reply);
     // Coaches (and camera operators, for live video) are recognized by their sign-in for their team.
     // The shared ACCESS_CODE still works for setups that use it.
     const codeOk = !!env.ACCESS_CODE && sameText(request.headers.get('x-gs-code') || '', String(env.ACCESS_CODE));
@@ -386,7 +397,7 @@ async function payTask(task, request, body, env, reply, allowed) {
         if (!toks.length) { noApp.push(name(pid)); continue; }
         reached.push(pid);
         const due = dueText(fee.due);
-        for (const t of toks) items.push({ id: t._id, token: t.token, title: 'Fee reminder: ' + String(fee.name || 'Tournament'), body: money(Number(fee.amount) || 0) + ' for ' + name(pid) + (due ? ' is due ' + due : ' is due') + '. Tap to pay.', tag: 'fee-' + feeId + '-' + pid, link: site + '/?team=' + encodeURIComponent(u.teamId) + '#team', icon: site + '/icons/icon-192.png' });
+        for (const t of toks) items.push({ id: t._id, token: t.token, native: !!t.native, title: 'Fee reminder: ' + String(fee.name || 'Tournament'), body: money(Number(fee.amount) || 0) + ' for ' + name(pid) + (due ? ' is due ' + due : ' is due') + '. Tap to pay.', tag: 'fee-' + feeId + '-' + pid, link: site + '/?team=' + encodeURIComponent(u.teamId) + '#team', icon: site + '/icons/icon-192.png' });
       }
       if (items.length) await sendItems(u.sa.project_id, await googleToken(u.sa), items.slice(0, 60), u.db);
       return reply(200, { reminded: reached.length, noApp });
@@ -406,7 +417,7 @@ async function googleToken(sa) {
   if (GTOK && GTOK.email === sa.client_email && GTOK.exp > Date.now() + 120000) return GTOK.token;
   const now = Math.floor(Date.now() / 1000);
   const enc = (o) => b64url(new TextEncoder().encode(JSON.stringify(o)));
-  const unsigned = enc({ alg: 'RS256', typ: 'JWT' }) + '.' + enc({ iss: sa.client_email, scope: 'https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/cloud-platform', aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600 });
+  const unsigned = enc({ alg: 'RS256', typ: 'JWT' }) + '.' + enc({ iss: sa.client_email, scope: 'https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/identitytoolkit', aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600 });
   const der = Uint8Array.from(atob(String(sa.private_key).replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')), (c) => c.charCodeAt(0));
   const key = await crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
   const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(unsigned));
@@ -501,124 +512,227 @@ function firestore(pid, tok, teamId) {
   };
 }
 
-// ---------- Delete account ----------
-// The signed-in person deletes their own account (App Store guideline 5.1.1(v)). For every team in
-// their My Teams list: their member record, settings, phone tokens, watch links, chat messages
-// (and chat photos) and reports are deleted. A team they own goes to the longest-serving other
-// coach; if there is none, the whole team is deleted. Last, the sign-in itself is deleted.
-const TEAM_COLLECTIONS = ['members', 'guests', 'invites', 'pushTokens', 'prefs', 'messages', 'reports', 'announcements',
-  'games', 'opponents', 'practices', 'team', 'swings', 'swingMedia', 'fees', 'config'];
-function fsRoot(pid, tok) {
-  const root = 'https://firestore.googleapis.com/v1/projects/' + pid + '/databases/(default)/documents';
-  const H = { Authorization: 'Bearer ' + tok, 'content-type': 'application/json' };
-  const out = (d) => Object.assign(fsObj(d.fields), { _id: d.name.split('/').pop(), _name: d.name });
-  const api = {
-    async get(path) { const r = await fetch(root + '/' + path, { headers: H }); if (r.status === 404) return null; if (!r.ok) throw new Error('get ' + r.status); return out(await r.json()); },
-    // Every document in one collection (path = 'teams/x/members').
-    async listAll(path) {
-      const all = [];
-      let page = '';
-      for (let n = 0; n < 40; n++) {
-        const r = await fetch(root + '/' + path + '?pageSize=300' + (page ? '&pageToken=' + encodeURIComponent(page) : ''), { headers: H });
-        if (r.status === 404) break;
-        if (!r.ok) throw new Error('list ' + r.status);
-        const d = await r.json();
-        for (const doc of d.documents || []) all.push(out(doc));
-        if (!d.nextPageToken) break;
-        page = d.nextPageToken;
-      }
-      return all;
-    },
-    // Documents in parent/col where field == value (a string).
-    async where(parent, col, field, value) {
-      const q = { from: [{ collectionId: col }], where: { fieldFilter: { field: { fieldPath: field }, op: 'EQUAL', value: { stringValue: String(value) } } } };
-      const r = await fetch(root + '/' + parent + ':runQuery', { method: 'POST', headers: H, body: JSON.stringify({ structuredQuery: q }) });
-      if (!r.ok) throw new Error('query ' + r.status);
-      return (await r.json()).filter((x) => x.document).map((x) => out(x.document));
-    },
-    async patch(path, data) {
-      const mask = Object.keys(data).map((k) => 'updateMask.fieldPaths=' + encodeURIComponent(k)).join('&');
-      const r = await fetch(root + '/' + path + '?' + mask, { method: 'PATCH', headers: H, body: JSON.stringify({ fields: fsEnc(data).mapValue.fields }) });
-      if (!r.ok) throw new Error('patch ' + r.status);
-    },
-    // Deletes full document names, up to 400 per request.
-    async delNames(names) {
-      const list = [...new Set(names.filter(Boolean))];
-      for (let i = 0; i < list.length; i += 400) {
-        const r = await fetch(root + ':commit', { method: 'POST', headers: H, body: JSON.stringify({ writes: list.slice(i, i + 400).map((n) => ({ delete: n })) }) });
-        if (!r.ok) throw new Error('delete ' + r.status);
-      }
-    },
-    docName(path) { return 'projects/' + pid + '/databases/(default)/documents/' + path; }
+// ---------- Paid plans (Apple in-app purchases) ----------
+// Teams buy Pro or Elite inside the iPhone app with Apple in-app purchases (StoreKit). Every
+// purchase carries the team's appAccountToken (a random id the Worker hands out per team), so a
+// purchase, a renewal or a cancellation always lands on the right team. The Worker never trusts
+// what the phone or a notification says about a subscription: it asks Apple's App Store Server API
+// for the current state and sets the team's plan from that.
+const APPLE_API = { Production: 'https://api.storekit.itunes.apple.com', Sandbox: 'https://api.storekit-sandbox.itunes.apple.com' };
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+function appleProducts(env) {
+  const bid = String(env.APPLE_BUNDLE_ID || '').trim();
+  const pick = (k, d) => String(env[k] || (bid ? bid + d : '')).trim();
+  return {
+    [pick('APPLE_PRODUCT_PRO_MONTH', '.pro.monthly')]: { plan: 'pro', interval: 'month' },
+    [pick('APPLE_PRODUCT_PRO_YEAR', '.pro.yearly')]: { plan: 'pro', interval: 'year' },
+    [pick('APPLE_PRODUCT_ELITE_MONTH', '.elite.monthly')]: { plan: 'elite', interval: 'month' },
+    [pick('APPLE_PRODUCT_ELITE_YEAR', '.elite.yearly')]: { plan: 'elite', interval: 'year' }
   };
-  return api;
 }
-async function dropPhotos(env, msgs) {
-  const keys = msgs.map((m) => m.photo && m.photo.key).filter((k) => k && PHOTO_KEY.test(k));
-  if (keys.length && env.PHOTOS) for (let i = 0; i < keys.length; i += 900) await env.PHOTOS.delete(keys.slice(i, i + 900)).catch(() => {});
+const appleReady = (env) => !!(env.APPLE_ISSUER_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY && env.APPLE_BUNDLE_ID && env.FIREBASE_SERVICE_ACCOUNT);
+// Reads the middle part of a JWS without checking it. Only used to find which transaction to ask
+// Apple about; the answer from Apple's own API is what counts.
+function jwsPayload(jws) {
+  try { const p = String(jws || '').split('.'); return p.length === 3 ? JSON.parse(new TextDecoder().decode(b64urlBytes(p[1]))) : null; } catch (e) { return null; }
 }
-// One person's own data in one team.
-async function removeFromTeam(env, fs, teamId, uid) {
-  const t = 'teams/' + teamId;
-  const [tokens, invites, msgs, reports] = await Promise.all([
-    fs.where(t, 'pushTokens', 'uid', uid), fs.where(t, 'invites', 'by', uid),
-    fs.where(t, 'messages', 'uid', uid), fs.where(t, 'reports', 'by', uid).catch(() => [])
-  ]);
-  await dropPhotos(env, msgs);
-  await fs.delNames([t + '/members/' + uid, t + '/prefs/' + uid, t + '/guests/' + uid].map(fs.docName)
-    .concat(tokens.map((x) => x._name), invites.map((x) => x._name), msgs.map((x) => x._name), reports.map((x) => x._name)));
+let ATOK = null;
+async function appleToken(env) {
+  if (ATOK && ATOK.exp > Date.now() + 120000) return ATOK.token;
+  const now = Math.floor(Date.now() / 1000);
+  const enc = (o) => b64url(new TextEncoder().encode(JSON.stringify(o)));
+  const unsigned = enc({ alg: 'ES256', kid: String(env.APPLE_KEY_ID).trim(), typ: 'JWT' }) + '.' + enc({ iss: String(env.APPLE_ISSUER_ID).trim(), iat: now, exp: now + 1800, aud: 'appstoreconnect-v1', bid: String(env.APPLE_BUNDLE_ID).trim() });
+  const der = Uint8Array.from(atob(String(env.APPLE_PRIVATE_KEY).replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')), (c) => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey('pkcs8', der, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, new TextEncoder().encode(unsigned));
+  ATOK = { token: unsigned + '.' + b64url(new Uint8Array(sig)), exp: Date.now() + 1700 * 1000 };
+  return ATOK.token;
 }
-// A whole team, for an owner with no other coach to hand it to.
-async function deleteTeam(env, fs, teamId) {
-  const t = 'teams/' + teamId;
-  const names = [];
-  for (const col of TEAM_COLLECTIONS) {
-    const docs = await fs.listAll(t + '/' + col);
-    if (col === 'messages') await dropPhotos(env, docs);
-    if (col === 'fees') for (const f of docs) for (const p of await fs.listAll(t + '/fees/' + f._id + '/pay')) names.push(p._name);
-    for (const d of docs) names.push(d._name);
+// Current state of a subscription from Apple. Tries the environment the purchase came from first
+// (TestFlight and App Review buy in Sandbox), then the other one.
+async function appleSubscription(env, transactionId, envHint) {
+  const sandboxOk = String(env.APPLE_SANDBOX || 'on').toLowerCase() !== 'off';
+  const order = envHint === 'Sandbox' ? ['Sandbox', 'Production'] : ['Production', 'Sandbox'];
+  for (const where of order) {
+    if (where === 'Sandbox' && !sandboxOk) continue;
+    const r = await fetch(APPLE_API[where] + '/inApps/v1/subscriptions/' + encodeURIComponent(transactionId), { headers: { Authorization: 'Bearer ' + await appleToken(env) } });
+    if (r.status === 404) continue;
+    if (r.status === 401) { ATOK = null; throw { status: 502, error: 'apple_auth', detail: 'Apple refused the In-App Purchase key. Check APPLE_ISSUER_ID, APPLE_KEY_ID and APPLE_PRIVATE_KEY.' }; }
+    if (!r.ok) throw { status: 502, error: 'apple', detail: 'Apple ' + r.status };
+    const d = await r.json();
+    if (String(d.bundleId || '') !== String(env.APPLE_BUNDLE_ID).trim()) throw { status: 400, error: 'wrong_app' };
+    const products = appleProducts(env);
+    // The newest of our plan subscriptions in the answer (normally there is exactly one).
+    let best = null;
+    for (const g of d.data || []) for (const last of g.lastTransactions || []) {
+      const tx = jwsPayload(last.signedTransactionInfo) || {};
+      const ren = jwsPayload(last.signedRenewalInfo) || {};
+      if (!products[tx.productId]) continue;
+      const s = { status: Number(last.status), otid: String(last.originalTransactionId || tx.originalTransactionId || ''), tx, ren, environment: d.environment || where };
+      if (!best || Number(tx.purchaseDate || 0) > Number(best.tx.purchaseDate || 0)) best = s;
+    }
+    return best;
   }
-  names.push(fs.docName(t));
-  await fs.delNames(names);
+  return null;
 }
-async function leaveTeam(env, fs, teamId, uid) {
-  const t = 'teams/' + teamId;
-  const setup = await fs.get(t + '/config/setup');
-  if (setup && setup.owner === uid) {
-    const members = await fs.listAll(t + '/members');
-    const next = members.filter((x) => x._id !== uid && x.status === 'approved' && x.role === 'admin')
-      .sort((a, b) => (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0))[0];
-    if (!next) { await deleteTeam(env, fs, teamId); return { teamId, result: 'deleted' }; }
-    await fs.patch(t + '/config/setup', { owner: next._id });
-    if (await fs.get(t)) await fs.patch(t, { owner: next._id });
-    await removeFromTeam(env, fs, teamId, uid);
-    return { teamId, result: 'transferred' };
+// Root-level documents (outside any team) that only the Worker can read or write.
+function rootDocs(sa, tok) {
+  const base = 'https://firestore.googleapis.com/v1/projects/' + sa.project_id + '/databases/(default)/documents/';
+  const H = { Authorization: 'Bearer ' + tok, 'content-type': 'application/json' };
+  return {
+    async get(path) { const r = await fetch(base + path, { headers: H }); if (r.status === 404) return null; if (!r.ok) throw new Error('firestore get ' + r.status); const d = await r.json(); return fsObj(d.fields); },
+    async set(path, data) { const r = await fetch(base + path, { method: 'PATCH', headers: H, body: JSON.stringify({ fields: fsEnc(data).mapValue.fields }) }); return r.ok; },
+    async list(path) { const r = await fetch(base + path + '?pageSize=300', { headers: H }); if (!r.ok) return []; return ((await r.json()).documents || []).map((d) => Object.assign(fsObj(d.fields), { _id: d.name.split('/').pop() })); },
+    async del(path) { await fetch(base + path, { method: 'DELETE', headers: H }).catch(() => {}); }
+  };
+}
+// Which team a subscription belongs to: its appAccountToken first, then a purchase linked earlier.
+async function appleTeamFor(root, sub) {
+  const t = String((sub.tx && sub.tx.appAccountToken) || '').toLowerCase();
+  if (UUID_RE.test(t)) { const m = await root.get('appleTokens/' + t); if (m && m.teamId) return cleanTeamId(m.teamId); }
+  if (sub.otid) { const m = await root.get('appleSubs/' + sub.otid); if (m && m.teamId) return cleanTeamId(m.teamId); }
+  return '';
+}
+// Sets the team's plan from Apple's answer.
+async function applyApple(env, sa, tok, teamId, sub) {
+  const db = firestore(sa.project_id, tok, teamId);
+  const bill = (await db.get('config/billing')) || {};
+  const found = appleProducts(env)[sub.tx.productId];
+  // 1 active, 4 billing grace period (Apple is retrying the card and the team keeps its plan).
+  const live = !!found && (sub.status === 1 || sub.status === 4) && !sub.tx.revocationDate;
+  // A team that moved to another subscription doesn't lose its plan when the old one ends.
+  if (!live && bill.appleOtid && bill.appleOtid !== sub.otid) return { plan: null, skipped: 'other_subscription' };
+  const plan = live ? found.plan : 'free';
+  const planStatus = sub.status === 1 ? 'active' : sub.status === 4 ? 'past_due' : sub.status === 3 ? 'billing_retry' : sub.status === 5 ? 'revoked' : 'expired';
+  const end = Number(sub.tx.expiresDate || 0);
+  const cancels = live && Number(sub.ren.autoRenewStatus) === 0;
+  // A switch Apple will make at the next renewal (for example Elite to Pro).
+  const next = live && !cancels && sub.ren.autoRenewProductId && sub.ren.autoRenewProductId !== sub.tx.productId ? appleProducts(env)[sub.ren.autoRenewProductId] : null;
+  await db.patch('', { plan, planStatus, planInterval: live ? found.interval : '', planRenews: live ? end : 0, planCancels: cancels, planUpdatedAt: Date.now() });
+  await db.patch('config/billing', { store: 'apple', appleOtid: sub.otid, appleProduct: String(sub.tx.productId || ''), appleNext: next ? next.plan + '-' + next.interval : '', appleEnv: String(sub.environment || ''), status: planStatus, plan, updatedAt: Date.now() });
+  return { plan };
+}
+// From the iPhone app: iap-token (owner gets the team's appAccountToken before buying) and
+// iap-link (after a purchase or a restore, the app sends the signed transactions it has).
+async function billingTask(task, request, body, env, reply) {
+  if (!appleReady(env)) return reply(500, { error: 'billing_not_configured' });
+  let u;
+  try { u = await hubUser(request, env); } catch (e) { return reply(e.status || 500, { error: e.error || 'upstream' }); }
+  try {
+    const tok = await googleToken(u.sa);
+    const root = rootDocs(u.sa, tok);
+    if (task === 'iap-token') {
+      if (!u.owner) return reply(403, { error: 'not_owner' });
+      const bill = (await u.db.get('config/billing')) || {};
+      let t = UUID_RE.test(String(bill.appleToken || '')) ? bill.appleToken : '';
+      if (!t) {
+        t = crypto.randomUUID();
+        await root.set('appleTokens/' + t, { teamId: u.teamId, owner: u.uid, at: Date.now() });
+        await u.db.patch('config/billing', { appleToken: t });
+      }
+      return reply(200, { appAccountToken: t, products: appleProducts(env), owns: bill.appleOtid ? { product: bill.appleProduct || '', plan: u.dir.plan || 'free' } : null });
+    }
+    // iap-link
+    const list = (Array.isArray(body.transactions) ? body.transactions : []).slice(0, 10);
+    const results = [];
+    const seen = new Set();
+    for (const jws of list) {
+      const p = jwsPayload(jws);
+      if (!p || !p.transactionId || String(p.bundleId || '') !== String(env.APPLE_BUNDLE_ID).trim()) continue;
+      const otid = String(p.originalTransactionId || p.transactionId);
+      if (seen.has(otid)) continue;
+      seen.add(otid);
+      const sub = await appleSubscription(env, String(p.transactionId), p.environment);
+      if (!sub) continue;
+      let teamId = await appleTeamFor(root, sub);
+      // No token on the purchase and never linked: it belongs to the team whose owner sent it.
+      if (!teamId && u.owner) teamId = u.teamId;
+      if (!teamId) continue;
+      const linked = await root.get('appleSubs/' + sub.otid);
+      if (!linked || linked.teamId !== teamId) await root.set('appleSubs/' + sub.otid, { teamId, at: Date.now() });
+      const r = await applyApple(env, u.sa, tok, teamId, sub);
+      results.push({ teamId, plan: r.plan, active: sub.status === 1 || sub.status === 4, product: sub.tx.productId });
+    }
+    return reply(200, { results });
+  } catch (e) {
+    return reply(e.status || 502, { error: e.error || 'upstream', detail: e.detail || '' });
   }
-  await removeFromTeam(env, fs, teamId, uid);
-  return { teamId, result: 'left' };
 }
-async function accountDelete(request, body, env, reply) {
+// App Store Server Notifications V2 (renewals, upgrades, cancellations, refunds, expirations).
+// Address to give Apple: https://<your-worker>/apple-notifications
+async function appleNotification(request, env) {
+  const ok = (status, msg) => new Response(JSON.stringify({ received: status === 200, msg }), { status, headers: { 'content-type': 'application/json' } });
+  if (!appleReady(env)) return ok(500, 'not configured');
+  const body = await request.json().catch(() => null);
+  const n = jwsPayload(body && body.signedPayload);
+  if (!n || !n.data) return ok(400, 'bad payload');
+  if (String(n.data.bundleId || '') !== String(env.APPLE_BUNDLE_ID).trim()) return ok(200, 'other app');
+  const tx = jwsPayload(n.data.signedTransactionInfo);
+  if (!tx || !tx.transactionId) return ok(200, 'ignored'); // TEST notifications and the like
+  try {
+    const sub = await appleSubscription(env, String(tx.transactionId), n.data.environment);
+    if (!sub) return ok(200, 'not ours');
+    const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
+    const tok = await googleToken(sa);
+    const root = rootDocs(sa, tok);
+    const teamId = await appleTeamFor(root, sub);
+    if (!teamId) return ok(200, 'no team yet'); // the app links it when the purchase finishes
+    await applyApple(env, sa, tok, teamId, sub);
+    return ok(200, 'updated');
+  } catch (e) {
+    return ok(500, 'update failed'); // Apple retries
+  }
+}
+// "Send a test notification": sends one to each of the signed-in person's phones on this team and
+// reports what Firebase answered, so a setup problem shows up as a clear error in the app.
+async function pushTest(request, env, reply) {
+  let u;
+  try { u = await hubUser(request, env); } catch (e) { return reply(e.status || 500, { error: e.error || 'upstream' }); }
+  try {
+    const toks = (await u.db.list('pushTokens')).filter((x) => x.uid === u.uid && x.token).slice(0, 5);
+    const gtok = await googleToken(u.sa);
+    const results = [];
+    for (const x of toks) {
+      const it = { token: x.token, native: !!x.native, title: 'Test notification', body: 'Notifications work on this phone.', tag: 'test', link: '', icon: '' };
+      const r = await fetch('https://fcm.googleapis.com/v1/projects/' + u.sa.project_id + '/messages:send', { method: 'POST', headers: { Authorization: 'Bearer ' + gtok, 'content-type': 'application/json' }, body: JSON.stringify({ message: fcmMessage(it) }) }).catch(() => null);
+      const txt = r && !r.ok ? await r.text().catch(() => '') : '';
+      const code = (/"errorCode"\s*:\s*"(\w+)"/.exec(txt) || /"status"\s*:\s*"(\w+)"/.exec(txt) || [])[1] || '';
+      results.push({ native: !!x.native, ok: !!(r && r.ok), status: r ? r.status : 0, code, detail: txt.slice(0, 300) });
+    }
+    return reply(200, { results });
+  } catch (e) {
+    return reply(502, { error: 'upstream' });
+  }
+}
+// Deletes the signed-in user's account (App Store rule 5.1.1): their spot on every team, their
+// notification tokens and settings, their My Teams list, then the sign-in itself. Teams they own
+// stay, so the families on them keep their games and stats.
+async function accountDelete(request, env, reply) {
   if (!env.FIREBASE_SERVICE_ACCOUNT) return reply(500, { error: 'not_configured' });
   const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
   const m = /^Bearer\s+(\S+)$/.exec(request.headers.get('authorization') || '');
-  const uid = m ? await verifyIdToken(m[1], sa.project_id) : null;
+  const uid = m && await verifyIdToken(m[1], sa.project_id);
   if (!uid) return reply(401, { error: 'signed_out' });
-  let teams = [];
   try {
     const tok = await googleToken(sa);
-    const fs = fsRoot(sa.project_id, tok);
-    const mine = await fs.listAll('users/' + uid + '/teams');
-    // Their My Teams list, plus the team they're on now (older teams may be missing from the list).
-    const ids = [...new Set(mine.map((d) => cleanTeamId(d._id)).concat(cleanTeamId(body && body.teamId)).filter((x) => x && x !== 'the-hub'))];
-    for (const id of ids) teams.push(await leaveTeam(env, fs, id, uid));
-    await fs.delNames(mine.map((d) => d._name));
-    const r = await fetch('https://identitytoolkit.googleapis.com/v1/projects/' + sa.project_id + '/accounts:delete', {
-      method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'content-type': 'application/json' }, body: JSON.stringify({ localId: uid })
-    });
-    if (!r.ok) return reply(502, { error: 'auth_delete_failed', teams });
-    return reply(200, { ok: true, teams });
+    const root = rootDocs(sa, tok);
+    const mine = await root.list('users/' + encodeURIComponent(uid) + '/teams');
+    for (const t of mine.slice(0, 100)) {
+      const teamId = cleanTeamId(t._id);
+      if (!teamId) continue;
+      const db = firestore(sa.project_id, tok, teamId);
+      await db.del('members/' + uid);
+      await db.del('prefs/' + uid);
+      await db.del('guests/' + uid);
+      const toks = await db.list('pushTokens').catch(() => []);
+      for (const p of toks) if (p.uid === uid) await db.del('pushTokens/' + p._id);
+      await root.del('users/' + encodeURIComponent(uid) + '/teams/' + encodeURIComponent(t._id));
+    }
+    const r = await fetch('https://identitytoolkit.googleapis.com/v1/projects/' + sa.project_id + '/accounts:delete', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'content-type': 'application/json' }, body: JSON.stringify({ localId: uid }) });
+    if (!r.ok) return reply(502, { error: 'upstream', detail: 'Couldn’t delete the sign-in (' + r.status + ').' });
+    return reply(200, { ok: true });
   } catch (e) {
-    return reply(502, { error: 'upstream', teams, detail: String((e && e.message) || '').slice(0, 120) });
+    return reply(502, { error: 'upstream' });
   }
 }
 function eastern(now) {
@@ -738,16 +852,16 @@ async function notifyRun(env, self, site, teamId) {
   const items = [];
   for (const t of tokens) {
     if (!t.token || !ok.has(t.uid)) continue;
-    for (const a of annNew) if (a.uid !== t.uid) items.push({ id: t._id, token: t.token, title: '📣 ' + (a.name || 'Coach'), body: String(a.text || '').slice(0, 180), tag: 'ann-' + a._id, link: site + '/?team=' + encodeURIComponent(teamId) + '#news', icon });
+    for (const a of annNew) if (a.uid !== t.uid) items.push({ id: t._id, token: t.token, native: !!t.native, title: '📣 ' + (a.name || 'Coach'), body: String(a.text || '').slice(0, 180), tag: 'ann-' + a._id, link: site + '/?team=' + encodeURIComponent(teamId) + '#news', icon });
     if (chatNew.length && t.chat !== false) {
       const mute = muted.get(t.uid) || {};
       const see = chatNew.filter((m) => m.uid !== t.uid && !mute[m.uid]);
-      if (see.length <= 3) for (const m of see) items.push({ id: t._id, token: t.token, title: (m.name || 'Team chat') + (m.coach ? ' (Coach)' : ''), body: say(m, 160), tag: 'chat-' + m._id, link, icon });
-      else { const last = see[see.length - 1]; items.push({ id: t._id, token: t.token, title: see.length + ' new messages in team chat', body: (last.name || '') + ': ' + say(last, 120), tag: 'chat', link, icon }); }
+      if (see.length <= 3) for (const m of see) items.push({ id: t._id, token: t.token, native: !!t.native, title: (m.name || 'Team chat') + (m.coach ? ' (Coach)' : ''), body: say(m, 160), tag: 'chat-' + m._id, link, icon });
+      else { const last = see[see.length - 1]; items.push({ id: t._id, token: t.token, native: !!t.native, title: see.length + ' new messages in team chat', body: (last.name || '') + ': ' + say(last, 120), tag: 'chat', link, icon }); }
     }
     for (const n of out) {
       if (n.kind === 'score' && (t.scores === 'off' || (n.level === 'all' && t.scores !== 'all'))) continue;
-      items.push({ id: t._id, token: t.token, title: n.title, body: n.body, tag: n.tag, link: n.link, icon });
+      items.push({ id: t._id, token: t.token, native: !!t.native, title: n.title, body: n.body, tag: n.tag, link: n.link, icon });
     }
   }
   const INLINE = 30;
@@ -758,12 +872,18 @@ async function notifyRun(env, self, site, teamId) {
   }
   return { sent: items.length };
 }
+// iPhone app tokens get an Apple (APNs) notification; browser tokens get a web push.
+function fcmMessage(it) {
+  return it.native
+    ? { token: it.token, notification: { title: it.title, body: it.body }, data: { link: String(it.link || '') }, apns: { headers: { 'apns-priority': '10', 'apns-collapse-id': String(it.tag || 'hub').slice(0, 64) }, payload: { aps: { sound: 'default', 'thread-id': String(it.tag || 'hub').split('-')[0] } } } }
+    : { token: it.token, webpush: { headers: { Urgency: 'high', TTL: '3600' }, notification: { title: it.title, body: it.body, icon: it.icon, tag: it.tag, renotify: true }, fcm_options: { link: it.link } } };
+}
 async function sendItems(pid, tok, items, db) {
   const gone = [];
   await Promise.all(items.map(async (it) => {
     const r = await fetch('https://fcm.googleapis.com/v1/projects/' + pid + '/messages:send', {
       method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'content-type': 'application/json' },
-      body: JSON.stringify({ message: { token: it.token, webpush: { headers: { Urgency: 'high', TTL: '3600' }, notification: { title: it.title, body: it.body, icon: it.icon, tag: it.tag, renotify: true }, fcm_options: { link: it.link } } } })
+      body: JSON.stringify({ message: fcmMessage(it) })
     }).catch(() => null);
     if (r && (r.status === 404 || r.status === 400)) { const t = await r.text().catch(() => ''); if (/UNREGISTERED|registration-token-not-registered|not a valid FCM registration token/i.test(t)) gone.push(it.id); }
   }));

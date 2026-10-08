@@ -869,9 +869,14 @@ window.GS_FIREBASE = {"apiKey":"AIzaSyDth-zgyTD4F8kzCyXKgrYWX_0YvwEgGYg","authDo
 // team gets chat photos, notifications, roster scanning, scouting reports and live video without
 // any setup of their own (coaches are recognized by their sign-in).
 window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshub.kollinmeubanks.workers.dev',
-  // Paid plans. Prices here are only what the app shows; the real prices are your App Store prices.
+  // Paid plans are bought inside the iPhone app with Apple in-app purchases (see APP_STORE.md).
+  // The iPhone app shows Apple's real prices; these are only shown on the website.
   // billing: false unlocks everything for every team (no plans).
-  billing: true, prices: { pro: { month: 15, year: 120 }, elite: { month: 35, year: 300 } } };
+  billing: true, prices: { pro: { month: 14.99, year: 119.99 }, elite: { month: 34.99, year: 300 } },
+  // siteUrl: the website address of this app (join links and watch links shared from the iPhone app
+  // point here). iosAppUrl: the App Store link once the app is live (the website points owners to it).
+  siteUrl: '', iosAppUrl: '',
+  privacyUrl: 'privacy.html', termsUrl: 'terms.html' };
 </script>
 <script>/* The Hub baseball scoring engine: replays a game's event log into game state and stats. */
 (function (root) {
@@ -1300,6 +1305,19 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
   const E = window.GSEngine;
   const APP = Object.assign({ appName: 'The Sports Hub', workerUrl: '' }, window.HUB_CONFIG || {});
   const APP_NAME = String(APP.appName || 'The Hub');
+  // Running inside the iPhone app (Capacitor) instead of a browser.
+  const CAP = window.Capacitor;
+  const NATIVE = !!(CAP && typeof CAP.isNativePlatform === 'function' && CAP.isNativePlatform());
+  const NativePlugin = (name) => (NATIVE && CAP.Plugins && CAP.Plugins[name]) || null;
+  if (NATIVE) document.documentElement.classList.add('native-app');
+  // Links people share must open the website, not the app's own private address.
+  const SITE = NATIVE && APP.siteUrl ? String(APP.siteUrl).replace(/\/+$/, '') + '/' : location.origin + location.pathname;
+  // Privacy Policy / Terms of Use links. In the iPhone app a page bundled with the app opens in place.
+  function legalLink(u, label) {
+    const url = String(u || '');
+    if (NATIVE && !/^https?:/i.test(url)) return `<a href="${esc(APP.siteUrl ? new URL(url, SITE).toString() : url)}"${APP.siteUrl ? ' target="_blank" rel="noopener"' : ''}>${esc(label)}</a>`;
+    return `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(label)}</a>`;
+  }
   const DEFAULT_LOGO = document.querySelector('.mark').getAttribute('src');
   // The current team's logo (or the app's own logo until the team uploads one).
   let LOGO = DEFAULT_LOGO;
@@ -1354,8 +1372,13 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
   try { if (TEAM_CHOSEN) localStorage.setItem(TEAM_KEY, TEAM_ID); else localStorage.removeItem(TEAM_KEY); } catch (e) {}
   function teamDoc(...parts) { return FB.F.doc(FB.fs, 'teams', TEAM_ID, ...parts); }
   function teamCollection(...parts) { return FB.F.collection(FB.fs, 'teams', TEAM_ID, ...parts); }
-  function teamLink(id) { const u = new URL(location.origin + location.pathname); u.searchParams.set('team', id || TEAM_ID); return u.toString(); }
+  function teamLink(id) { const u = new URL(SITE); u.searchParams.set('team', id || TEAM_ID); return u.toString(); }
   // Opens another team. A full reload keeps every team's data, listeners and offline copy separate.
+  // Back to the start screen with no team picked (after signing out).
+  function goHome() {
+    try { localStorage.removeItem(TEAM_KEY); } catch (e) { /* fine */ }
+    location.href = location.origin + location.pathname;
+  }
   function goTeam(id, tab) {
     id = cleanTeamId(id); if (!id) return;
     try { localStorage.setItem(TEAM_KEY, id); } catch (e) { /* the URL carries it */ }
@@ -1378,9 +1401,8 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
   ];
 
   // ---------- Plans: Free, Pro, Elite (one per team) ----------
-  // A team's plan lives on its public card (teams/{id}.plan). Clients can't set it (security rules);
-  // it's written server-side once an App Store purchase is confirmed, or by the app owner in the
-  // Firebase console.
+  // A team's plan lives on its public card (teams/{id}.plan). Only the Worker sets it, when Apple
+  // confirms a purchase, renewal or cancellation (or the app owner, by hand, in the Firebase console).
   const PLAN_ORDER = ['free', 'pro', 'elite'];
   const PRICES = Object.assign({ pro: { month: 15, year: 120 }, elite: { month: 35, year: 300 } }, APP.prices || {});
   const PLANS = {
@@ -1681,7 +1703,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       scheduleRender();
     }, () => { Invites.loaded = true; scheduleRender(); });
   }
-  function watchLink(token) { return location.origin + location.pathname + '?team=' + encodeURIComponent(TEAM_ID) + '&watch=' + token + '#live'; }
+  function watchLink(token) { return SITE + '?team=' + encodeURIComponent(TEAM_ID) + '&watch=' + token + '#live'; }
   function newToken() {
     const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
     const r = crypto.getRandomValues(new Uint8Array(32));
@@ -1733,7 +1755,10 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
     FB.app = app; FB.cfg = cfg;
     // Storage is only for logo uploads, so it loads on its own and never blocks opening offline.
     import(base + 'firebase-storage.js').then((m) => { FB.S = m; FB.storage = m.getStorage(app); }).catch(() => {});
-    FB.auth = FB.A.getAuth(app);
+    // In the iPhone app, getAuth() waits on a web sign-in popup frame that never loads, so set up
+    // auth directly with on-device storage.
+    FB.auth = NATIVE ? FB.A.initializeAuth(app, { persistence: [FB.A.indexedDBLocalPersistence, FB.A.browserLocalPersistence] }) : FB.A.getAuth(app);
+    if (NATIVE) pushNativeInit();
     try { FB.fs = FB.F.initializeFirestore(app, { localCache: FB.F.persistentLocalCache({ tabManager: FB.F.persistentMultipleTabManager() }) }); }
     catch (e) { FB.fs = FB.F.getFirestore(app); }
     Backend.kind = 'fb';
@@ -1956,8 +1981,6 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
     } else {
       h += '<div class="row"><span class="grow">Coaches sign in here to score games.</span><button class="btn sm primary" data-act="authOpen" data-mode="signin">Sign in</button></div>';
     }
-    if (X.user && !X.user.isAnonymous) h += '<div class="hr"></div><div class="row"><div class="grow"><b>Delete account</b><div class="small muted">Permanently deletes your account and your data.</div></div><button class="btn sm danger" data-act="accountDelete">Delete account</button></div>';
-    h += '<div class="small muted" style="text-align:center"><a href="terms.html">Terms of Use</a> · <a href="privacy.html">Privacy Policy</a></div>';
     return h + '</section>';
   }
   function familiesHTML() {
@@ -2152,7 +2175,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
     if (Fees.busy) return;
     Fees.busy = 'remind'; render();
     try {
-      const r = await workerPost({ task: 'fee-remind', fee: feeId, players: players || undefined, back: location.origin + location.pathname });
+      const r = await workerPost({ task: 'fee-remind', fee: feeId, players: players || undefined, back: SITE });
       if (r.ok) {
         const n = r.d.reminded || 0, miss = r.d.noApp || [];
         toast((n ? `Reminder sent to ${n} famil${n === 1 ? 'y' : 'ies'}.` : 'No reminders sent.') + (miss.length ? ` Couldn’t reach (no linked account or notifications off): ${miss.map(feeName).join(', ').replace(/\.$/, '')}.` : ''));
@@ -2816,6 +2839,36 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
     document.body.classList.remove('viewer-on');
   }
 
+  // ---------- Paid plans in the iPhone app (Apple in-app purchases) ----------
+  // The Worker hands the owner this team's appAccountToken and the product IDs; every purchase
+  // carries the token, so Apple's renewals and cancellations always land on the right team.
+  const IAP = { team: '', token: '', ids: {}, prices: {}, at: 0 };
+  async function iapLoad(force) {
+    if (!force && IAP.team === TEAM_ID && Date.now() - IAP.at < 10 * 60 * 1000) return IAP;
+    const P = NativePlugin('NativePurchases');
+    if (!P) throw { msg: 'Purchases aren’t available in this version of the app.' };
+    const r = await workerPost({ task: 'iap-token' });
+    if (!r.ok) throw { msg: r.d.error === 'billing_not_configured' ? 'Purchases aren’t set up yet. The app’s owner needs to add the Apple settings to the Worker.' : r.d.error === 'not_owner' ? 'Only the team’s owner can change the plan.' : 'Couldn’t reach the App Store. Try again in a minute.' };
+    const ids = {}, prices = {};
+    for (const pid in r.d.products || {}) { const x = r.d.products[pid]; if (pid && x) ids[x.plan + '-' + x.interval] = pid; }
+    try {
+      const got = await P.getProducts({ productIdentifiers: Object.values(ids), productType: 'subs' });
+      for (const pr of (got && got.products) || []) for (const k in ids) if (ids[k] === pr.identifier) prices[k] = pr.priceString;
+    } catch (e) { /* prices stay empty; buying says the plan isn't available yet */ }
+    Object.assign(IAP, { team: TEAM_ID, token: String(r.d.appAccountToken || '').toLowerCase(), ids, prices, at: Date.now() });
+    return IAP;
+  }
+  // Sends signed App Store transactions to the Worker, which checks them with Apple and sets the plan.
+  async function iapLink(jws) {
+    const list = (jws || []).filter(Boolean);
+    if (!list.length) return null;
+    for (let i = 0; i < 3; i++) {
+      try { const r = await workerPost({ task: 'iap-link', transactions: list }); if (r.ok) return r.d.results || []; } catch (e) { /* retry */ }
+      await sleep(1500 * (i + 1));
+    }
+    return null;
+  }
+
   // ---------- Phone notifications (Firebase Cloud Messaging) ----------
   const PUSH_KEY = 'sports-hub-push-' + TEAM_ID;
   const Push = { M: null, messaging: null, busy: false, listening: false };
@@ -2824,6 +2877,11 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
   const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const isInstalled = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
   function pushState() {
+    if (NATIVE) {
+      if (!NativePlugin('FirebaseMessaging')) return 'unsupported';
+      if (Push.nativePerm === 'denied') return 'blocked';
+      return pushLocal() && Push.nativePerm === 'granted' ? 'on' : 'off';
+    }
     if (!(FB.cfg && FB.cfg.vapidKey)) return 'not_setup';
     if (isIOS() && !isInstalled()) return 'install';
     if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
@@ -2847,7 +2905,39 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
   }
   async function sha256hex(t) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)); return Array.from(new Uint8Array(b)).map((x) => x.toString(16).padStart(2, '0')).join(''); }
   async function pushWrite(v) {
-    await FB.F.setDoc(teamDoc('pushTokens', v.id), { uid: Access.user.uid, token: v.token, chat: v.chat, scores: v.scores, at: Date.now() });
+    const d = { uid: Access.user.uid, token: v.token, chat: v.chat, scores: v.scores, at: Date.now() };
+    if (v.native) d.native = true;
+    await FB.F.setDoc(teamDoc('pushTokens', v.id), d);
+  }
+  // iPhone app: notifications come from Apple through Firebase (FCM), not from a web service worker.
+  async function pushNativeInit() {
+    const M = NativePlugin('FirebaseMessaging');
+    if (!M || Push.nativeInit) return;
+    Push.nativeInit = true;
+    try { Push.nativePerm = (await M.checkPermissions()).receive; } catch (e) { Push.nativePerm = 'prompt'; }
+    M.addListener('notificationReceived', (ev) => {
+      const n = (ev && ev.notification) || {};
+      const link = String((n.data && n.data.link) || '');
+      if ((UI.tab === 'chat' && /#chat$/.test(link)) || (UI.tab === 'news' && /#news$/.test(link))) return;
+      if (n.title) toast(n.title + (n.body ? ': ' + n.body : ''));
+    });
+    M.addListener('notificationActionPerformed', (ev) => {
+      const n = (ev && ev.notification) || {};
+      let u; try { u = new URL(String((n.data && n.data.link) || '')); } catch (e) { return; }
+      const team = cleanTeamId(u.searchParams.get('team'));
+      const tab = (u.hash || '').slice(1);
+      if (team && team !== TEAM_ID) goTeam(team, tab);
+      else if (tab) location.hash = '#' + tab;
+    });
+    // Apple can hand the app a new token; keep the saved one current.
+    M.addListener('tokenReceived', async (ev) => {
+      const v = pushLocal();
+      if (!v || !ev || !ev.token || ev.token === v.token) return;
+      try { await FB.F.deleteDoc(teamDoc('pushTokens', v.id)); } catch (e) { /* gone */ }
+      const nv = Object.assign({}, v, { token: ev.token, id: await sha256hex(ev.token) });
+      try { await pushWrite(nv); pushSaveLocal(nv); } catch (e) { /* next open */ }
+    });
+    scheduleRender();
   }
   function pushHTML() {
     if (!(UI.standalone && chatAllowed())) return '';
@@ -2856,6 +2946,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
     const v = pushLocal();
     let body = '';
     if (stt === 'not_setup') body = '<p style="margin:0">Notifications aren’t set up for the team yet.</p>';
+    else if (stt === 'blocked' && NATIVE) body = '<p style="margin:0">Notifications are off for ' + esc(APP_NAME) + '. Turn them on in your iPhone’s Settings → Notifications → ' + esc(APP_NAME) + ', then come back here.</p>';
     else if (stt === 'install') body = '<p style="margin:0">On iPhone, notifications only work from the Home Screen app. In Safari, tap <b>Share → Add to Home Screen</b>, open <b>' + esc(APP_NAME) + '</b> from your Home Screen, sign in, and turn notifications on here.</p>';
     else if (stt === 'unsupported') body = '<p style="margin:0">This browser can’t show notifications. On iPhone, use the Home Screen app (iOS 16.4 or later).</p>';
     else if (stt === 'blocked') body = '<p style="margin:0">Notifications are blocked for this app. Turn them on in your phone’s Settings → Notifications → ' + esc(APP_NAME) + ', then come back here.</p>';
@@ -2865,7 +2956,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       <p class="small muted" style="margin:0">Coach announcements always come through while notifications are on.</p>
       <div><span class="field-lbl">Game updates</span>${segB('pushScores', v.scores, [['runs', 'Runs & final'], ['all', 'Every half-inning'], ['off', 'Off']])}</div>
       <p class="small muted" style="margin:0">Each game update replaces the last one, so your lock screen works like a live scoreboard.</p>
-      <div><button class="btn sm" data-act="pushOff">Turn off on this phone</button></div>`;
+      <div class="row" style="gap:8px"><button class="btn sm" data-act="pushTest">Send a test notification</button><button class="btn sm" data-act="pushOff">Turn off on this phone</button></div>`;
     return `<h2 class="sec">Notifications</h2><section class="card stack" style="padding:14px">${body}</section>`;
   }
   async function pushRemove() {
@@ -2873,6 +2964,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
     if (!v) return;
     pushSaveLocal(null);
     try { await FB.F.deleteDoc(teamDoc('pushTokens', v.id)); } catch (e) { /* already gone */ }
+    if (NATIVE) { try { await NativePlugin('FirebaseMessaging').deleteToken(); } catch (e) { /* best effort */ } return; }
     try { const m = await pushMessaging(); await Push.M.deleteToken(m); } catch (e) { /* best effort */ }
   }
 
@@ -4285,9 +4377,9 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
   const fmtUSD = (n) => '$' + (Number(n) % 1 ? Number(n).toFixed(2) : String(Number(n)));
   function planStatusLine() {
     const d = Dir.d || {}, pl = teamPlan();
-    if (pl === 'free') return 'Free plan. Upgrade any time for branding, notifications, scouting and more.';
+    if (pl === 'free') return d.planStatus === 'billing_retry' ? 'Apple couldn’t renew the plan. Update the payment method on the owner’s Apple ID and it comes back on its own.' : 'Free plan. Upgrade any time for branding, notifications, scouting and more.';
     const when = d.planRenews ? new Date(d.planRenews).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-    if (d.planStatus === 'past_due') return 'Payment didn’t go through. Update the payment method on your Apple ID to keep ' + PLANS[pl].name + '.';
+    if (d.planStatus === 'past_due') return 'Apple couldn’t renew the plan. Update the payment method on the owner’s Apple ID to keep ' + PLANS[pl].name + '.';
     if (d.planCancels && when) return PLANS[pl].name + ' until ' + when + ', then Free.';
     return PLANS[pl].name + (d.planInterval ? ', billed ' + (d.planInterval === 'year' ? 'yearly' : 'monthly') : '') + (when ? '. Renews ' + when + '.' : '.');
   }
@@ -4702,7 +4794,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       return head(titles[sh.mode]) + intro + f
         + (sh.msg ? `<div class="small" style="color:var(--good);font-weight:600">${esc(sh.msg)}</div>` : '')
         + (sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : '')
-        + (sh.mode === 'signup' || sh.mode === 'setup' || sh.mode === 'account' ? '<p class="small muted" style="margin:0">By creating an account you agree to the <a href="terms.html">Terms of Use</a>, including no abusive or objectionable content, and the <a href="privacy.html">Privacy Policy</a>.</p>' : '')
+        + (sh.mode === 'signup' || sh.mode === 'setup' || sh.mode === 'account' ? `<p class="small muted" style="margin:0">By creating an account you agree to the ${legalLink(APP.termsUrl || 'terms.html', 'Terms of Use')}, including no abusive or objectionable content, and the ${legalLink(APP.privacyUrl || 'privacy.html', 'Privacy Policy')}.</p>` : '')
         + `<div class="row"><button class="btn primary" data-act="authSubmit" ${sh.busy ? 'disabled' : ''}>${sh.busy ? 'Working…' : btn}</button></div>` + links;
     },
     news(sh) {
@@ -4717,16 +4809,6 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       return head('Blocked in team chat') + `<p class="small muted" style="margin:0">You don’t see their messages or photos or get notified when they post. They aren’t told, and only you see this list.</p>
         ${list.length ? `<div class="card" style="padding:0 14px;box-shadow:none">${list.map(([u, n]) => `<div class="who" style="cursor:default"><span class="nm"><b>${esc(n)}</b></span><button class="btn sm" data-act="muteOff" data-uid="${esc(u)}">Unblock</button></div>`).join('')}</div>` : '<p class="muted" style="margin:0">Nobody is blocked.</p>'}
         <div class="row"><button class="btn" data-act="close">Done</button></div>`;
-    },
-    accountDelete(sh) {
-      const owned = (MyTeams.list || []).filter((t) => t.role === 'owner' || (t.owner && Access.user && t.owner === Access.user.uid));
-      const ownNote = owned.length ? `<p class="small" style="margin:0"><b>You own ${esc(owned.map((t) => t.name || t.id).join(', '))}.</b> Each team you own goes to its longest-serving other coach. A team with no other coach is deleted for everyone, with all its games, stats and chat.</p>` : '';
-      return head('Delete your account?') + `<p style="margin:0">This permanently deletes your sign-in and your data on every team: your membership, chat messages and photos, settings and notifications. It can’t be undone.</p>
-        ${MyTeams.list === null ? '<p class="small muted" style="margin:0">Checking your teams…</p>' : ownNote}
-        <p class="small muted" style="margin:0">Active App Store subscriptions aren’t canceled by deleting your account. Cancel them in your Apple ID’s Subscriptions settings.</p>
-        <label><span class="field-lbl">Type DELETE to confirm</span>${inp('confirm', sh.confirm, 'autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="DELETE"')}</label>
-        ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
-        <div class="row"><button class="btn danger" data-act="accountDeleteGo" ${sh.busy ? 'disabled' : ''}>${sh.busy ? 'Deleting…' : 'Delete my account'}</button><button class="btn" data-act="close" ${sh.busy ? 'disabled' : ''}>Cancel</button></div>`;
     },
     report(sh) {
       const opts = REPORT_REASONS.map(([k, l]) => `<label class="row" style="gap:10px;cursor:pointer"><input type="radio" name="report-reason" data-act="reportReason" data-v="${k}"${sh.reason === k ? ' checked' : ''}><span>${esc(l)}</span></label>`).join('');
@@ -4808,21 +4890,32 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
     plans(sh) {
       const cur = teamPlan(), yr = sh.interval === 'year';
       const tog = segB('planInterval', yr ? 'year' : 'month', [['month', 'Monthly'], ['year', 'Yearly (save)']]);
+      const store = IAP.team === TEAM_ID ? IAP : null;
       const card = (k) => {
         const pl = PLANS[k], price = PRICES[k];
-        const amt = k === 'free' ? '<span class="pc-price">$0</span>' : `<span class="pc-price">${fmtUSD(yr ? price.year : price.month)}<small>/${yr ? 'year' : 'month'}</small></span>`;
+        // In the iPhone app, Apple's own localized price; on the website, the list price.
+        const ap = NATIVE && k !== 'free' && store && store.prices[k + '-' + (yr ? 'year' : 'month')];
+        const amt = k === 'free' ? '<span class="pc-price">$0</span>' : ap ? `<span class="pc-price">${esc(ap)}<small>/${yr ? 'year' : 'month'}</small></span>` : `<span class="pc-price">${fmtUSD(yr ? price.year : price.month)}<small>/${yr ? 'year' : 'month'}</small></span>`;
         const save = k !== 'free' && yr && price.month ? `<div class="small" style="color:var(--good);font-weight:700">${Math.round(100 - (price.year / (price.month * 12)) * 100)}% less than monthly</div>` : '';
         let btn = '';
         if (k === cur) btn = '<span class="small muted">Your current plan</span>';
-        else if (Access.isOwner && k !== 'free') btn = `<button class="btn primary" data-act="planBuy" data-plan="${k}" ${sh.busy ? 'disabled' : ''}>${sh.busy === k ? 'Opening the App Store…' : planRank(k) > planRank(cur) ? 'Upgrade to ' + pl.name : 'Switch to ' + pl.name}</button>`;
-        else if (Access.isOwner && k === 'free' && cur !== 'free') btn = '<button class="btn" data-act="planManage">Manage subscription</button>';
+        else if (Access.isOwner && k !== 'free' && NATIVE) btn = `<button class="btn primary" data-act="planBuy" data-plan="${k}" ${sh.busy ? 'disabled' : ''}>${sh.busy === k ? 'Opening the App Store…' : planRank(k) > planRank(cur) ? 'Upgrade to ' + pl.name : 'Switch to ' + pl.name}</button>`;
+        else if (Access.isOwner && k === 'free' && cur !== 'free' && NATIVE) btn = '<button class="btn" data-act="planManage">Cancel in Manage subscription</button>';
         return `<div class="plan-card${k === cur ? ' cur' : ''}${k === sh.want && k !== cur ? ' want' : ''}"><div class="pc-top"><span class="plan-chip ${k}">${pl.name}</span><span class="small muted">${esc(pl.tag)}</span>${amt}</div>${save}<ul>${pl.feats.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>${btn ? `<div class="row">${btn}</div>` : ''}</div>`;
       };
       const why = sh.f && FEATURE_NAME[sh.f] ? `<p class="small" style="margin:0"><b>${esc(FEATURE_NAME[sh.f])}</b> comes with ${PLANS[FEATURE_PLAN[sh.f]].name}.</p>` : '';
+      const legal = legalLink(APP.termsUrl || 'terms.html', 'Terms of Use') + ' · ' + legalLink(APP.privacyUrl || 'privacy.html', 'Privacy Policy');
+      let foot;
+      if (NATIVE) {
+        foot = `<p class="small muted" style="margin:0">Each team has its own plan. Payment is charged to your Apple ID when you confirm. The subscription renews automatically at the same price for the same period (monthly or yearly) unless you turn off auto-renew at least 24 hours before the end of the current period. Manage or cancel any time in your Apple ID’s Subscriptions settings; the team keeps its plan until the end of the period you paid for.${Access.isOwner ? '' : ' Only the team’s owner can change the plan.'}</p>
+        ${Access.isOwner ? `<div class="row" style="gap:8px"><button class="btn sm" data-act="planRestore" ${sh.busy ? 'disabled' : ''}>${sh.busy === 'restore' ? 'Restoring…' : 'Restore purchases'}</button>${cur !== 'free' ? '<button class="btn sm" data-act="planManage">Manage subscription</button>' : ''}</div>` : ''}
+        <p class="small muted" style="margin:0">${legal}</p>`;
+      } else {
+        const appLink = APP.iosAppUrl ? ` <a href="${esc(APP.iosAppUrl)}" target="_blank" rel="noopener">Get the iPhone app</a>.` : '';
+        foot = `<p class="small" style="margin:0"><b>${Access.isOwner ? 'To upgrade, open ' + esc(APP_NAME) + ' on your iPhone' : 'Only the team’s owner can change the plan, from the iPhone app'}</b> and go to Team → Plan.${appLink}</p><p class="small muted" style="margin:0">Each team has its own plan, and everyone on the team gets its features on any phone or computer. ${legal}</p>`;
+      }
       return head('Plans for ' + esc(teamTitle())) + why + `<div>${tog}</div><div class="plans">${PLAN_ORDER.map(card).join('')}</div>
-        ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
-        <p class="small muted" style="margin:0">Each team has its own plan. Subscriptions are charged to your Apple ID and renew automatically unless turned off at least 24 hours before the period ends. Manage or cancel in your Apple ID’s Subscriptions settings; the team keeps its plan until the end of the period you paid for.${Access.isOwner ? '' : ' Only the team’s owner can change the plan.'}</p>
-        <p class="small muted" style="margin:0"><a href="terms.html">Terms of Use</a> · <a href="privacy.html">Privacy Policy</a></p>`;
+        ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}${foot}`;
     },
     teams() {
       const u = Access.user;
@@ -4833,8 +4926,16 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       else h += `<div class="tm-list">${teamRowsHTML(list, { manage: true })}</div>`;
       h += '<div class="row"><button class="btn primary" data-act="teamCreate">+ Create a team</button><button class="btn" data-act="teamJoin">Join a team</button></div>';
       h += '<p class="small muted" style="margin:0">Coaches can run as many teams as they like, and families can follow every team their kids play on. Switch any time from the Teams button at the top.</p>';
-      if (u && !u.isAnonymous) h += `<div class="hr"></div><div class="row"><span class="grow small muted">Signed in as ${esc(u.email || '')}</span><button class="btn ghost sm" data-act="signOut">Sign out</button></div><div class="row" style="justify-content:flex-end"><button class="btn ghost sm danger" data-act="accountDelete">Delete account</button></div>`;
+      if (u && !u.isAnonymous) h += `<div class="hr"></div><div class="row"><span class="grow small muted">Signed in as ${esc(u.email || '')}</span><button class="btn ghost sm" data-act="signOut">Sign out</button></div><div class="row" style="gap:8px"><button class="btn ghost sm" data-act="accountDelete">Delete account</button></div>`;
+      h += `<p class="small muted" style="margin:0">${legalLink(APP.privacyUrl || 'privacy.html', 'Privacy Policy')} · ${legalLink(APP.termsUrl || 'terms.html', 'Terms of Use')}</p>`;
       return h;
+    },
+    accountDelete(sh) {
+      return head('Delete your account') + `<p style="margin:0">This permanently deletes your ${esc(APP_NAME)} account: your sign-in, your place on every team, and your notification settings. It can’t be undone.</p>
+        <p class="small muted" style="margin:0">Teams you own stay, so their families keep their games and stats. Paid plans bought on your Apple ID keep renewing until you cancel them in your Apple ID’s Subscriptions settings.</p>
+        <label><span class="field-lbl">Type DELETE to confirm</span>${inp('confirm', sh.confirm, 'autocomplete="off" autocapitalize="characters" spellcheck="false"')}</label>
+        ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
+        <div class="row"><button class="btn danger" data-act="accountDeleteGo" ${sh.busy ? 'disabled' : ''}>${sh.busy ? 'Deleting…' : 'Delete my account'}</button><button class="btn" data-act="close">Cancel</button></div>`;
     },
     teamCreate(sh) {
       const id = cleanTeamId(sh.code);
@@ -6050,6 +6151,27 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
     },
     async pushOn() {
       if (Push.busy) return;
+      if (NATIVE) {
+        const M = NativePlugin('FirebaseMessaging');
+        if (!M) return;
+        let perm = 'denied';
+        try { perm = (await M.requestPermissions()).receive; } catch (e) { perm = 'denied'; }
+        Push.nativePerm = perm;
+        if (perm !== 'granted') { render(); toast('Notifications are off. Turn them on in your iPhone\u2019s Settings.'); return; }
+        Push.busy = true; render();
+        try {
+          const { token } = await M.getToken();
+          if (!token) throw new Error('no token');
+          const v = { uid: Access.user.uid, id: await sha256hex(token), token, chat: true, scores: 'runs', native: true };
+          await pushWrite(v);
+          pushSaveLocal(v);
+          toast('Notifications are on');
+        } catch (e) {
+          toast(e && e.code === 'permission-denied' ? 'Couldn\u2019t save. Check that the latest security rules are published.' : 'Couldn\u2019t turn on notifications. Try again in a moment.');
+        }
+        Push.busy = false; render();
+        return;
+      }
       let perm = 'default';
       try { perm = await Notification.requestPermission(); } catch (e) { perm = 'denied'; }
       if (perm !== 'granted') { render(); toast(perm === 'denied' ? 'Notifications are blocked. Turn them on in your phone\u2019s Settings.' : 'Notifications weren\u2019t turned on.'); return; }
@@ -6069,6 +6191,22 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       Push.busy = false; render();
     },
     async pushOff() { await pushRemove(); render(); toast('Notifications are off on this phone'); },
+    async pushTest() {
+      const v = pushLocal();
+      if (!v) return;
+      toast('Sending a test…');
+      try {
+        // Make sure this phone's current token is the one saved, then ask the Worker to send to it.
+        await pushWrite(v).catch(() => {});
+        const r = await workerPost({ task: 'push-test' });
+        const res = (r.d && r.d.results) || [];
+        const mine = res.find((x) => x.native === !!v.native) || res[0];
+        if (!r.ok) toast('Couldn\u2019t reach the server (' + (r.d.error || r.status) + ').');
+        else if (!mine) toast('This phone isn\u2019t saved for notifications. Turn them off and on again.');
+        else if (mine.ok) toast(NATIVE ? 'Sent. Lock your phone: it should arrive in a few seconds.' : 'Sent. It should arrive in a few seconds.');
+        else toast('Firebase refused it: ' + (mine.code || ('HTTP ' + mine.status)) + '. Send this to your app developer.');
+      } catch (e) { toast('Couldn\u2019t send the test. Check your connection.'); }
+    },
     async pushChat(d) { const v = pushLocal(); if (!v) return; v.chat = d.v === 'on'; pushSaveLocal(v); render(); try { await pushWrite(v); } catch (e) { toast('Couldn\u2019t save that setting.'); } },
     async pushScores(d) { const v = pushLocal(); if (!v) return; v.scores = d.v; pushSaveLocal(v); render(); try { await pushWrite(v); } catch (e) { toast('Couldn\u2019t save that setting.'); } },
     msgTap(d, el, ev) {
@@ -6148,41 +6286,6 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
         reportSend(m, 'blocked').catch(() => {});
         toast('Blocked ' + m.name);
       }, true);
-    },
-    accountDelete() {
-      if (!Access.user || Access.user.isAnonymous) return;
-      openSheet({ type: 'accountDelete', confirm: '', err: '', busy: false });
-      if (MyTeams.list === null) loadMyTeams().then(() => { if (UI.sheet && UI.sheet.type === 'accountDelete') renderSheet(); }).catch(() => {});
-    },
-    async accountDeleteGo() {
-      const sh = UI.sheet;
-      if (!sh || sh.type !== 'accountDelete' || sh.busy) return;
-      if (String(sh.confirm || '').trim().toUpperCase() !== 'DELETE') { sh.err = 'Type DELETE to confirm.'; return renderSheet(); }
-      const url = String(APP.workerUrl || workerUrl() || '').trim().replace(/\/+$/, '');
-      if (!url) { sh.err = 'Account deletion isn’t available right now. Email kollinmeubanks@gmail.com and we’ll delete it for you.'; return renderSheet(); }
-      sh.busy = true; sh.err = ''; renderSheet();
-      const u = FB.auth.currentUser;
-      try {
-        const tok = await u.getIdToken(true);
-        const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + tok }, body: JSON.stringify({ task: 'account-delete', teamId: TEAM_CHOSEN ? TEAM_ID : '' }) });
-        const d = (await r.json().catch(() => null)) || {};
-        if (!r.ok && d.error === 'auth_delete_failed') await FB.A.deleteUser(u); // data is gone; remove the sign-in from here
-        else if (!r.ok) throw { code: d.error || 'upstream' };
-        try { await pushRemove(); } catch (e) { /* the token was deleted with the account */ }
-        try {
-          for (const k of Object.keys(localStorage)) if (k.indexOf(u.uid) >= 0 || k === TEAM_KEY) localStorage.removeItem(k);
-        } catch (e) { /* nothing saved here */ }
-        await FB.A.signOut(FB.auth).catch(() => {});
-        closeSheet();
-        toast('Your account was deleted');
-        setTimeout(() => { location.href = location.pathname; }, 1200);
-      } catch (e) {
-        sh.busy = false;
-        sh.err = e && e.code === 'auth/requires-recent-login' ? 'Your data was deleted. Sign out, sign back in, and tap Delete account again to finish.'
-          : e && e.code === 'signed_out' ? 'Please sign out and sign back in, then try again.'
-          : 'Couldn’t delete your account. Check your connection and try again, or email kollinmeubanks@gmail.com.';
-        if (UI.sheet === sh) renderSheet();
-      }
     },
     msgReport(d) {
       const m = Chat.list.find((x) => x.id === d.id);
@@ -6335,7 +6438,14 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
         if (UI.sheet === sh) renderSheet();
       }
     },
-    async signOut() { try { await pushRemove(); await FB.A.signOut(FB.auth); toast('Signed out'); } catch (e) { toast('Could not sign out. Try again.'); } },
+    async signOut() {
+      // Guests (watch links) stay on the team they were watching; everyone else goes back to the
+      // start screen to sign in again and pick a team.
+      const guest = !!(Access.user && Access.user.isAnonymous);
+      try { await pushRemove(); await FB.A.signOut(FB.auth); } catch (e) { toast('Could not sign out. Try again.'); return; }
+      if (guest) { toast('Signed out'); return; }
+      goHome();
+    },
     async claim() {
       try { await claimAdmin('', ''); toast('You’re the admin'); }
       catch (e) { toast(e && e.code === 'already-claimed' ? 'This hub already has an admin.' : authErrorText(e)); }
@@ -7068,26 +7178,79 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
     planOpen(d) {
       if (!BILLING_ON) return;
       openSheet({ type: 'plans', interval: (UI.sheet && UI.sheet.interval) || 'year', want: (d && d.plan) || '', f: (d && d.f) || '', busy: '', err: '' });
+      if (NATIVE && Access.isOwner) iapLoad(false).then(() => { if (UI.sheet && UI.sheet.type === 'plans') renderSheet(); }).catch(() => {});
     },
     planInterval(d) { if (UI.sheet && UI.sheet.type === 'plans') { UI.sheet.interval = d.v; renderSheet(); } },
-    // Subscriptions are App Store In-App Purchases. The iPhone app provides window.HubStore.buy(plan,
-    // interval, teamId) and resolves once Apple confirms; anywhere else, plans are bought in the app.
     async planBuy(d) {
       const sh = UI.sheet;
       if (!sh || sh.busy || !Access.isOwner) return;
-      const store = window.HubStore;
-      if (!store || typeof store.buy !== 'function') { sh.err = 'Plans are purchased in The Sports Hub iPhone app.'; return renderSheet(); }
+      if (!NATIVE) { sh.err = 'Plans are bought in the iPhone app. Open ' + APP_NAME + ' on your iPhone and go to Team → Plan.'; return renderSheet(); }
+      const P = NativePlugin('NativePurchases');
+      if (!P || !workerUrl()) { sh.err = 'Purchases aren’t available in this version of the app.'; return renderSheet(); }
+      const interval = sh.interval === 'month' ? 'month' : 'year';
       sh.busy = d.plan; sh.err = ''; renderSheet();
       try {
-        const r = await store.buy(d.plan, sh.interval === 'month' ? 'month' : 'year', TEAM_ID);
-        if (r && r.ok) { closeSheet(); toast('Thanks! Your new plan turns on in a few seconds.'); return; }
-        sh.err = r && r.canceled ? '' : 'The purchase didn’t go through. Nothing was charged.';
-      } catch (e) { sh.err = 'Couldn’t reach the App Store. Check your connection and try again.'; }
+        const st = await iapLoad(true);
+        const pid = st.ids[d.plan + '-' + interval];
+        if (!pid || !st.prices[d.plan + '-' + interval]) throw { msg: 'This plan isn’t available in the App Store yet. Try again later.' };
+        // One Apple ID can hold one plan at a time. If it's on another team, say so instead of moving it.
+        const have = await P.getPurchases({ productType: 'subs' }).catch(() => ({ purchases: [] }));
+        const other = (have.purchases || []).find((x) => x.isActive && x.appAccountToken && String(x.appAccountToken).toLowerCase() !== st.token && Object.values(st.ids).includes(x.productIdentifier));
+        if (other) throw { msg: 'Your Apple ID already pays for a plan on another team. Cancel it in Manage subscription first, or buy this team’s plan with a different Apple ID.' };
+        const tx = await P.purchaseProduct({ productIdentifier: pid, productType: 'subs', quantity: 1, appAccountToken: st.token });
+        const r = await iapLink([tx && tx.jwsRepresentation]);
+        toast(r ? 'Thanks! ' + PLANS[d.plan].name + ' is on for ' + teamTitle() + '.' : 'Thanks! Your plan turns on in a few seconds.');
+        if (UI.sheet === sh) closeSheet();
+        render();
+        return;
+      } catch (e) {
+        const m = String((e && (e.message || e.code)) || '');
+        if (/cancel/i.test(m)) sh.err = '';
+        else sh.err = (e && e.msg) || (/pending|deferred/i.test(m) ? 'The purchase is waiting for approval (for example Ask to Buy). The plan turns on once it’s approved.' : 'The purchase didn’t go through. Nothing was charged. Try again in a minute.');
+      }
       sh.busy = ''; if (UI.sheet === sh) renderSheet();
     },
-    planManage() {
+    async planRestore() {
+      const sh = UI.sheet;
+      const P = NativePlugin('NativePurchases');
+      if (!sh || sh.busy || !P) return;
+      sh.busy = 'restore'; sh.err = ''; renderSheet();
+      try {
+        await P.restorePurchases().catch(() => {});
+        const have = await P.getPurchases({ productType: 'subs' });
+        const jws = (have.purchases || []).map((x) => x.jwsRepresentation).filter(Boolean);
+        const res = jws.length ? await iapLink(jws) : null;
+        const here = res && res.find((x) => x.teamId === TEAM_ID && x.active);
+        const elsewhere = res && res.find((x) => x.teamId !== TEAM_ID && x.active);
+        toast(here ? 'Restored. ' + PLANS[here.plan].name + ' is on for this team.' : elsewhere ? 'Restored. Your Apple ID’s plan belongs to another one of your teams.' : 'No active plan found on this Apple ID.');
+      } catch (e) { sh.err = 'Couldn’t restore purchases. Check your connection and try again.'; }
+      sh.busy = ''; if (UI.sheet === sh) renderSheet();
+    },
+    async planManage() {
       if (!Access.isOwner) return;
-      location.href = 'https://apps.apple.com/account/subscriptions';
+      const P = NativePlugin('NativePurchases');
+      if (P) { try { await P.manageSubscriptions(); return; } catch (e) { /* fall through */ } }
+      toast('Manage the plan in your iPhone’s Settings → your name → Subscriptions.');
+    },
+    accountDelete() { openSheet({ type: 'accountDelete', confirm: '', busy: false, err: '' }); },
+    async accountDeleteGo() {
+      const sh = UI.sheet;
+      if (!sh || sh.busy) return;
+      if (String(sh.confirm || '').trim().toUpperCase() !== 'DELETE') { sh.err = 'Type DELETE to confirm.'; return renderSheet(); }
+      if (!APP.workerUrl) { sh.err = 'Account deletion isn’t set up. Contact the app’s support.'; return renderSheet(); }
+      sh.busy = true; sh.err = ''; renderSheet();
+      try {
+        await pushRemove().catch(() => {});
+        const tok = await Access.user.getIdToken(true);
+        const r = await fetch(String(APP.workerUrl).replace(/\/+$/, ''), { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + tok }, body: JSON.stringify({ task: 'account-delete' }) });
+        if (!r.ok) throw new Error('worker ' + r.status);
+        await FB.A.signOut(FB.auth).catch(() => {});
+        closeSheet();
+        toast('Your account was deleted.');
+        setTimeout(goHome, 1200);
+        return;
+      } catch (e) { sh.err = 'Couldn’t delete the account. Check your connection and try again.'; }
+      sh.busy = false; if (UI.sheet === sh) renderSheet();
     },
     expandToggle(d) {
       const k = d.key, open = !UI.expand[k];
@@ -7258,6 +7421,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       }, true);
     },
     ytStart(d) {
+      if (NATIVE) return toast('Upload to YouTube from ' + APP_NAME + ' on the website. Google doesn\u2019t allow its sign-in inside apps.');
       const p = ytToken();
       p.then(() => ytUpload(d.rid), (e) => { const t = ytErrText(e); if (t) toast(t); });
     },
@@ -7265,7 +7429,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       const r = Recs.list && Recs.list.find((x) => x.rid === d.rid);
       if (r && r.yt && r.gid) { await ytSetReplay(r.gid, r.yt.id); render(); if (Cam.open) camRender(); }
     },
-    ytSetup() { if (!has('ytUpload')) return planGate('ytUpload'); const y = Data.team.yt || {}; openSheet({ type: 'yt', clientId: y.clientId || '', auto: y.auto !== false, attach: !!y.attach }); },
+    ytSetup() { if (!has('ytUpload')) return planGate('ytUpload'); if (NATIVE) return toast('Set up YouTube uploads from ' + APP_NAME + ' on the website. Google doesn\u2019t allow its sign-in inside apps.'); const y = Data.team.yt || {}; openSheet({ type: 'yt', clientId: y.clientId || '', auto: y.auto !== false, attach: !!y.attach }); },
     ytAuto(d) { UI.sheet.auto = d.v === 'on'; renderSheet(); },
     ytAttach(d) { UI.sheet.attach = d.v === 'on'; renderSheet(); },
     ytSave() {
@@ -7434,7 +7598,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       const cfg = loadAiCfg();
       if (cfg) Caps.sample = makeWorkerAI(cfg);
       // Keeps a copy of the Hub on this phone so it opens with no signal (also handles notifications).
-      if ('serviceWorker' in navigator && window.isSecureContext) {
+      if (!NATIVE && 'serviceWorker' in navigator && window.isSecureContext) {
         navigator.serviceWorker.register('firebase-messaging-sw.js', { updateViaCache: 'none' }).then((reg) => {
           // Check for a newly deployed worker every time the app opens.
           reg.update().catch(() => {});

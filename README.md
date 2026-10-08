@@ -12,7 +12,8 @@ It's built to be sold to many teams at once. Every team brands it as their own a
 - **Team switcher.** The **Teams** button at the top (or tapping the team name) lists every team you're on, with logo, your role and whether you're still waiting for approval. Tap one to switch. A new phone opens the team you used last.
 - **Team code and join link.** Coaches see the team code on the Team tab, with **Copy code** and **Share join link**.
 - **Practice attendance.** On the Practice tab, coaches tap **Attendance** on any practice and mark each player Present or Absent (or **Everyone present**). Each player gets an attendance % and a row of green/red squares, plus a team %. Families see only their own player's record and the team %.
-- **Paid plans.** Free, Pro and Elite per team, sold as App Store subscriptions in the iPhone app, and features that lock and unlock on their own. See SETUP.md, Paid plans.
+- **Paid plans.** Free, Pro and Elite per team, bought with Apple in-app purchases in the iPhone app, with features that lock and unlock on their own. See APP_STORE.md.
+- **iPhone app.** The same app packaged for the App Store with Capacitor, with native notifications. Built and uploaded to TestFlight by a GitHub Actions workflow. See APP_STORE.md.
 - **Expandable lists.** On the Team tab, the **Roster**, **Coaches & staff**, **Families** and **Opponent rosters** show the first few names with **Show all** to expand and **Show less** to fold back. Each heading shows the count.
 
 ## Setting it up
@@ -283,7 +284,7 @@ Roster photo scanning, scouting reports, the built-in camera, chat photos, fee r
 | `CF_ACCOUNT_ID` | Text | Built-in camera (your Cloudflare account ID) |
 | `FIREBASE_SERVICE_ACCOUNT` | Secret | Phone notifications, chat photos and tournament fees (see [Notifications](#notifications)) |
 | `ALLOWED_ORIGIN` | Text | **Required.** Your app's address, e.g. `https://app.yourdomain.com` (comma-separate several) |
-| `COMP_TEAMS`, `PLANS` | | Paid plans (see SETUP.md, Paid plans) |
+| `APPLE_*`, `COMP_TEAMS`, `PLANS` | | Paid plans (see APP_STORE.md) |
 | `APP_NAME` | Text | Optional. Your app's name in notifications |
 | `TEAM_IDS` | Text | Optional. Teams are found automatically; not needed |
 

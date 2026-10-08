@@ -1,0 +1,22 @@
+{
+  "appId": "com.kollinmeubanks.thesportshub",
+  "appName": "Sports Hub",
+  "webDir": "www",
+  "backgroundColor": "#00030D",
+  "ios": {
+    "contentInset": "never",
+    "limitsNavigationsToAppBoundDomains": false
+  },
+  "plugins": {
+    "FirebaseMessaging": {
+      "presentationOptions": [
+        "badge",
+        "sound"
+      ]
+    },
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "backgroundColor": "#00030D"
+    }
+  }
+}

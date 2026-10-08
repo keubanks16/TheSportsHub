@@ -45,7 +45,7 @@ Create a Worker, paste `worker.js`, deploy, then in **Settings → Variables and
 | `ANTHROPIC_API_KEY` | Secret | Roster photo scanning and scouting reports |
 | `CF_STREAM_TOKEN`, `CF_ACCOUNT_ID` | Secret / Text | Built-in live video (Cloudflare Stream) |
 | `APP_NAME` | Text | Optional, your app's name in notifications |
-| `COMP_TEAMS`, `PLANS` | Text | Optional, see Paid plans below |
+| `APPLE_*` settings | | Paid plans, see [APP_STORE.md](APP_STORE.md) |
 
 Also add an **R2 bucket** binding named `PHOTOS` (chat photos) and a **Cron Trigger** every minute (`* * * * *`). The Worker finds every team on its own; you don't list them.
 
@@ -58,11 +58,11 @@ Coaches are recognized by their sign-in, so they never need the access code.
 3. On another phone (or a private window), create an account and **Join a team** with the code. Approve it on the first phone.
 4. Create a second team and switch between them with the **Teams** button.
 
-## Paid plans (App Store)
+## Paid plans (Apple in-app purchases)
 
-Each team has its own plan. New teams start on **Free**; the owner upgrades from **Team → Plan → See plans** in the iPhone app, which sells the plans as auto-renewable In-App Purchase subscriptions. The iPhone app provides `window.HubStore.buy(plan, interval, teamId)`; on the website, the plans screen tells owners to upgrade in the iPhone app. **Manage subscription** opens the person's Apple ID subscriptions.
+Each team has its own plan. New teams start on **Free**; the owner upgrades in the iPhone app from **Team → Plan → See plans**, and pays with Apple in-app purchase. The Worker checks the purchase with Apple and turns the plan on within seconds; Apple tells the Worker about renewals, cancellations and refunds. On the website, owners see the plans and are pointed to the iPhone app.
 
-| | Free | Pro ($15/mo or $120/yr) | Elite ($35/mo or $300/yr) |
+| | Free | Pro ($14.99/mo or $119.99/yr) | Elite ($34.99/mo or $300/yr) |
 | --- | --- | --- | --- |
 | Scoring, box scores, stats, roster, schedule, practices | ✓ | ✓ | ✓ |
 | Team chat and announcements | ✓ (no photos) | ✓ | ✓ |
@@ -71,23 +71,15 @@ Each team has its own plan. New teams start on **Free**; the owner upgrades from
 | Tournament fees, phone notifications, chat photos, watch links | | ✓ | ✓ |
 | Spray charts and scouting, AI roster scanning, AI scouting reports, Swing AI, built-in live video, YouTube uploads | | | ✓ |
 
-Until the App Store purchase is wired to set the plan automatically, give a team a plan by hand: Firestore → `teams` → the team → field `plan` (string) = `pro` or `elite`.
+Setup (App Store Connect subscriptions, the Worker's `APPLE_*` settings, notifications for Apple) is in **[APP_STORE.md](APP_STORE.md)**.
 
 ### Good to know about plans
 
 - **Your own teams:** list them in `COMP_TEAMS` on the Worker **and** give them the plan in the app by opening Firestore → `teams` → your team → add field `plan` (string) = `elite`. Teams can't set this field themselves.
-- **Prices shown in the app** come from `prices` in `HUB_CONFIG` (`index.html`). If you change prices in App Store Connect, change them there too.
+- **Prices:** the iPhone app shows Apple's prices. The website shows `prices` from `HUB_CONFIG` (`index.html`); keep them matching what you set in App Store Connect.
 - **No plans at all:** set `billing: false` in `HUB_CONFIG` and `PLANS` = `off` on the Worker; every team gets everything.
 - **Downgrades:** nothing is deleted. Locked features hide until the team upgrades again; past photos, fees and spray data come back.
-- **Where it's enforced:** the app hides locked features, and the Worker refuses Pro/Elite work (photos, notifications, fee reminders, AI, live video) for teams without the plan. Teams can't change the plan themselves (security rules).
-
-## Deleting an account
-
-**Team → Account → Delete account** deletes the person's sign-in and their data in every team they belong to: member record, chat messages and photos, settings, phone tokens, watch links and reports. A team they own goes to the longest-serving other coach; with no other coach, the whole team is deleted. This runs in the Worker, so it needs `FIREBASE_SERVICE_ACCOUNT` (and the `PHOTOS` bucket for chat photos).
-
-## Reporting and blocking in chat
-
-Tap any message in Chat to **Report** it or **Block** the sender. Blocking hides that person's messages and notifications for you only. Reports go to the team's coaches, who see **Reported messages** at the top of Chat and can delete the message or dismiss the report. All reports are also in Firestore under `teams/{team}/reports` for the app owner.
+- **Where it's enforced:** the app hides locked features, and the Worker refuses Pro/Elite work (photos, notifications, fee reminders, AI, live video) for teams without the plan. The plan itself can only be changed by the Worker, after checking with Apple.
 
 ## Good to know
 
