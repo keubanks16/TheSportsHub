@@ -67,6 +67,36 @@ async function main() {
     info.push({ g, subs });
     log('- Group "' + g.attributes.referenceName + '": ' + subs.map((s) => s.attributes.productId + ' [' + s.attributes.state + ', level ' + s.attributes.groupLevel + ']').join(', '));
   }
+  if (cfg.mode === 'match') {
+    // Make the team 2+ plans match the first group's settings (App Store only, no multi-seat).
+    const base = info.find((x) => x.subs.some((s) => s.attributes.productId === BUNDLE + '.pro.monthly'));
+    const ref = base.subs[0].attributes;
+    log('\n## Matching settings to the first group: marketSettings ' + JSON.stringify(ref.marketSettings) + ', multiSeatStatus ' + ref.multiSeatStatus);
+    for (const { subs } of info) for (const s of subs) {
+      const m = /\.team(\d+)\.(\w+)\.(\w+)$/.exec(s.attributes.productId);
+      if (!m) continue;
+      const attributes = { reviewNote: 'Same plan as ' + BUNDLE + '.' + m[2] + '.' + m[3] + ', for a coach paying for an additional team (team ' + m[1] + '). Each team has its own subscription.' };
+      if (JSON.stringify(s.attributes.marketSettings) !== JSON.stringify(ref.marketSettings)) attributes.marketSettings = ref.marketSettings;
+      if (s.attributes.multiSeatStatus !== ref.multiSeatStatus) attributes.multiSeatStatus = ref.multiSeatStatus;
+      try { await api('PATCH', '/v1/subscriptions/' + s.id, { data: { type: 'subscriptions', id: s.id, attributes } }); }
+      catch (e) {
+        // Try the fields one at a time so one refusal doesn't block the others.
+        log('- ' + s.attributes.productId + ': ' + e.message);
+        for (const k of Object.keys(attributes)) {
+          try { await api('PATCH', '/v1/subscriptions/' + s.id, { data: { type: 'subscriptions', id: s.id, attributes: { [k]: attributes[k] } } }); }
+          catch (e2) { log('  - ' + k + ': ' + e2.message); }
+        }
+      }
+    }
+    const after = [];
+    for (const { subs } of info) for (const s of subs) {
+      const a = (await api('GET', '/v1/subscriptions/' + s.id)).data.attributes;
+      after.push('| ' + a.productId + ' | ' + a.state + ' | ' + JSON.stringify(a.marketSettings) + ' | ' + a.multiSeatStatus + ' |');
+    }
+    log('\n| Product | State | Markets | Multi-seat |\n| --- | --- | --- | --- |\n' + after.join('\n'));
+    log('\nAPI calls: ' + calls);
+    return;
+  }
   if (cfg.mode === 'verify') {
     log('\n## Groups');
     for (const { g, subs } of info) {
