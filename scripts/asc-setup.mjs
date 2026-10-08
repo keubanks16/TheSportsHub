@@ -85,7 +85,17 @@ async function main() {
   }
 
   const territories = (await all('/v1/territories?limit=200')).data.map((t) => t.id);
-  const sellIn = territories.filter((t) => !cfg.removeEU || !EU.includes(t));
+  const sellIn = Array.isArray(cfg.only) ? territories.filter((t) => cfg.only.includes(t)) : territories.filter((t) => !cfg.removeEU || !EU.includes(t));
+  // Where a plan is sold (POST replaces the plan's list of countries).
+  const setSubAvail = async (sid, label) => {
+    try { await api('POST', '/v1/subscriptionAvailabilities', { data: { type: 'subscriptionAvailabilities', attributes: { availableInNewTerritories: false }, relationships: { subscription: rel('subscriptions', sid), availableTerritories: { data: sellIn.map((t) => ({ type: 'territories', id: t })) } } } }); return true; }
+    catch (e) { log('  - ' + label + ' availability: ' + e.message); return false; }
+  };
+  if (APPLY && Array.isArray(cfg.only)) {
+    let ok = 0;
+    for (const x of src) if (await setSubAvail(x.s.id, x.s.attributes.productId)) ok++;
+    log('- first group: ' + ok + ' of ' + src.length + ' plans set to sell only in ' + sellIn.join(', '));
+  }
   log('- Territories: ' + territories.length + ' total, plans will be sold in ' + sellIn.length);
 
   // ---------- Create the other team slots ----------
@@ -121,9 +131,7 @@ async function main() {
         await api('POST', '/v1/subscriptionLocalizations', { data: { type: 'subscriptionLocalizations', attributes: { locale: l.attributes.locale, name: (l.attributes.name + ' · Team ' + n).slice(0, 35), description: l.attributes.description || undefined }, relationships: { subscription: rel('subscriptions', sid) } } });
       }
 
-      try {
-        await api('POST', '/v1/subscriptionAvailabilities', { data: { type: 'subscriptionAvailabilities', attributes: { availableInNewTerritories: true }, relationships: { subscription: rel('subscriptions', sid), availableTerritories: { data: sellIn.map((t) => ({ type: 'territories', id: t })) } } } });
-      } catch (e) { if (e.status !== 409) log('  - availability: ' + e.message); }
+      await setSubAvail(sid, pid);
 
       if (x.usd) try {
         const pts = (await all('/v1/subscriptions/' + sid + '/pricePoints?filter[territory]=USA&limit=200')).data;
@@ -164,8 +172,8 @@ async function main() {
   }
 
   // ---------- Take the app out of the EU ----------
-  if (cfg.removeEU) {
-    log('\n## EU availability');
+  if (cfg.removeEU || Array.isArray(cfg.only)) {
+    log('\n## App availability');
     let av = null;
     // The app's availability record shares the app's id.
     for (const p of ['/v2/appAvailabilities/' + app.id, '/v1/apps/' + app.id + '/appAvailabilityV2']) {
@@ -173,16 +181,24 @@ async function main() {
     }
     if (av) {
       const ta = await all('/v2/appAvailabilities/' + av.id + '/territoryAvailabilities?include=territory&limit=200');
-      const eu = ta.data.filter((t) => EU.includes(t.relationships.territory.data.id));
-      const on = eu.filter((t) => t.attributes.available);
-      log('- EU countries currently on: ' + on.length + ' of ' + eu.length);
+      const tid = (t) => t.relationships.territory.data.id;
+      const keep = (t) => (Array.isArray(cfg.only) ? cfg.only.includes(tid(t)) : !EU.includes(tid(t)));
+      const on = ta.data.filter((t) => t.attributes.available && !keep(t));
+      const turnOn = ta.data.filter((t) => !t.attributes.available && keep(t));
+      log('- countries to turn off: ' + on.length + ', to turn on: ' + (turnOn.map(tid).join(', ') || 'none'));
       if (APPLY) {
         let done = 0;
         for (const t of on) {
           try { await api('PATCH', '/v1/territoryAvailabilities/' + t.id, { data: { type: 'territoryAvailabilities', id: t.id, attributes: { available: false } } }); done++; }
-          catch (e) { log('  - ' + t.relationships.territory.data.id + ': ' + e.message); }
+          catch (e) { log('  - ' + tid(t) + ': ' + e.message); }
         }
-        log('- turned off in ' + done + ' EU countries');
+        for (const t of turnOn) {
+          try { await api('PATCH', '/v1/territoryAvailabilities/' + t.id, { data: { type: 'territoryAvailabilities', id: t.id, attributes: { available: true } } }); }
+          catch (e) { log('  - ' + tid(t) + ': ' + e.message); }
+        }
+        log('- turned off in ' + done + ' countries' + (turnOn.length ? ', turned on in ' + turnOn.map(tid).join(', ') : ''));
+        const now = (await all('/v2/appAvailabilities/' + av.id + '/territoryAvailabilities?include=territory&limit=200')).data.filter((t) => t.attributes.available).map(tid);
+        log('- app is now available in: ' + (now.length > 10 ? now.length + ' countries' : now.join(', ')));
       }
     }
   }

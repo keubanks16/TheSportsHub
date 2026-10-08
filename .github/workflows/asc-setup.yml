@@ -7,7 +7,9 @@ on:
     paths: ['scripts/asc-setup.json', 'scripts/asc-setup.mjs']
 permissions:
   contents: write
-concurrency: asc-setup
+concurrency:
+  group: asc-setup
+  cancel-in-progress: true
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -37,4 +39,5 @@ jobs:
           git config user.email "asc-setup@users.noreply.github.com"
           git add asc-report.md
           git commit -m "App Store Connect setup report [skip ci]" || exit 0
+          git pull --rebase -q || true
           git push

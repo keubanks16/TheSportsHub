@@ -1,1 +1,1 @@
-{ "mode": "apply", "slots": 5, "removeEU": true }
+{ "mode": "apply", "slots": 5, "only": ["USA"] }
