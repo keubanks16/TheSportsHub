@@ -4938,7 +4938,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       h += '<div class="row"><button class="btn primary" data-act="teamCreate">+ Create a team</button><button class="btn" data-act="teamJoin">Join a team</button></div>';
       h += '<p class="small muted" style="margin:0">Coaches can run as many teams as they like, and families can follow every team their kids play on. Switch any time from the Teams button at the top.</p>';
       if (u && !u.isAnonymous) h += `<div class="hr"></div><div class="row"><span class="grow small muted">Signed in as ${esc(u.email || '')}</span><button class="btn ghost sm" data-act="signOut">Sign out</button></div><div class="row" style="gap:8px"><button class="btn ghost sm" data-act="accountDelete">Delete account</button></div>`;
-      h += `<p class="small muted" style="margin:0">${legalLink(APP.privacyUrl || 'privacy.html', 'Privacy Policy')} · ${legalLink(APP.termsUrl || 'terms.html', 'Terms of Use')}</p>`;
+      h += `<p class="small muted" style="margin:0">${legalLink(APP.privacyUrl || 'privacy.html', 'Privacy Policy')} · ${legalLink(APP.termsUrl || 'terms.html', 'Terms of Use')} · <a href="mailto:kollinmeubanks@gmail.com?subject=The%20Sports%20Hub%20support">Contact support</a></p>`;
       return h;
     },
     accountDelete(sh) {
