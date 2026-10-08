@@ -1,0 +1,40 @@
+name: "App Store Connect: one-time setup"
+# Runs scripts/asc-setup.mjs when scripts/asc-setup.json changes on the asc-setup branch,
+# then commits the report (asc-report.md) back to that branch.
+on:
+  push:
+    branches: ['asc-setup']
+    paths: ['scripts/asc-setup.json', 'scripts/asc-setup.mjs']
+permissions:
+  contents: write
+concurrency: asc-setup
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: API key
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          if printf '%s' "$ASC_KEY_P8" | grep -q 'BEGIN PRIVATE KEY'; then printf '%s\n' "$ASC_KEY_P8"; else printf '%s' "$ASC_KEY_P8" | base64 --decode; fi > "$RUNNER_TEMP/keys/key.p8"
+          echo "ASC_KEY_PATH=$RUNNER_TEMP/keys/key.p8" >> "$GITHUB_ENV"
+      - name: Run
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: node scripts/asc-setup.mjs
+      - name: Save report
+        if: always()
+        run: |
+          git config user.name "asc-setup"
+          git config user.email "asc-setup@users.noreply.github.com"
+          git add asc-report.md
+          git commit -m "App Store Connect setup report [skip ci]" || exit 0
+          git push
