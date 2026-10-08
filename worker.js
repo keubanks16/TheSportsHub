@@ -29,7 +29,10 @@
 //   APPLE_PRODUCT_PRO_MONTH, APPLE_PRODUCT_PRO_YEAR, APPLE_PRODUCT_ELITE_MONTH, APPLE_PRODUCT_ELITE_YEAR
 //                            Text    optional; product IDs default to <bundle id>.pro.monthly, .pro.yearly,
 //                                    .elite.monthly and .elite.yearly
-//   APPLE_SANDBOX            Text    optional; "off" = TestFlight/sandbox purchases don't turn plans on
+//   APPLE_TEAM_SLOTS         Text    optional; how many teams one Apple ID can pay for (default 5, max 10).
+//                                    Team 1 uses the IDs above; team N uses <bundle id>.team<N>.pro.monthly
+//                                    and so on, each team in its own subscription group (see APP_STORE.md).
+//   APPLE_SANDBOX           Text    optional; "off" = TestFlight/sandbox purchases don't turn plans on
 //   PLANS                    Text    optional; "off" = every team gets everything (no plans)
 //   COMP_TEAMS               Text    optional; comma-separated team codes that always get Elite (your own teams)
 //   App Store Server Notifications V2 address to give Apple: https://<your-worker>/apple-notifications
@@ -520,15 +523,36 @@ function firestore(pid, tok, teamId) {
 // for the current state and sets the team's plan from that.
 const APPLE_API = { Production: 'https://api.storekit.itunes.apple.com', Sandbox: 'https://api.storekit-sandbox.itunes.apple.com' };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-function appleProducts(env) {
+// Apple lets one Apple ID hold one subscription per subscription group. So a coach can pay for
+// several teams, each "team slot" is its own group with its own four products. Slot 1 is the
+// original group; slot N uses <bundle id>.teamN.pro.monthly and so on.
+const appleSlotCount = (env) => Math.min(10, Math.max(1, parseInt(env.APPLE_TEAM_SLOTS, 10) || 5));
+// Product IDs of one slot: { productId: { plan, interval, slot } }.
+function appleSlotProducts(env, slot) {
   const bid = String(env.APPLE_BUNDLE_ID || '').trim();
-  const pick = (k, d) => String(env[k] || (bid ? bid + d : '')).trim();
+  if (slot === 1) {
+    const pick = (k, d) => String(env[k] || (bid ? bid + d : '')).trim();
+    return {
+      [pick('APPLE_PRODUCT_PRO_MONTH', '.pro.monthly')]: { plan: 'pro', interval: 'month', slot: 1 },
+      [pick('APPLE_PRODUCT_PRO_YEAR', '.pro.yearly')]: { plan: 'pro', interval: 'year', slot: 1 },
+      [pick('APPLE_PRODUCT_ELITE_MONTH', '.elite.monthly')]: { plan: 'elite', interval: 'month', slot: 1 },
+      [pick('APPLE_PRODUCT_ELITE_YEAR', '.elite.yearly')]: { plan: 'elite', interval: 'year', slot: 1 }
+    };
+  }
+  if (!bid) return {};
+  const p = bid + '.team' + slot;
   return {
-    [pick('APPLE_PRODUCT_PRO_MONTH', '.pro.monthly')]: { plan: 'pro', interval: 'month' },
-    [pick('APPLE_PRODUCT_PRO_YEAR', '.pro.yearly')]: { plan: 'pro', interval: 'year' },
-    [pick('APPLE_PRODUCT_ELITE_MONTH', '.elite.monthly')]: { plan: 'elite', interval: 'month' },
-    [pick('APPLE_PRODUCT_ELITE_YEAR', '.elite.yearly')]: { plan: 'elite', interval: 'year' }
+    [p + '.pro.monthly']: { plan: 'pro', interval: 'month', slot },
+    [p + '.pro.yearly']: { plan: 'pro', interval: 'year', slot },
+    [p + '.elite.monthly']: { plan: 'elite', interval: 'month', slot },
+    [p + '.elite.yearly']: { plan: 'elite', interval: 'year', slot }
   };
+}
+// Every plan product across all slots.
+function appleProducts(env) {
+  const all = {};
+  for (let s = 1; s <= appleSlotCount(env); s++) Object.assign(all, appleSlotProducts(env, s));
+  return all;
 }
 const appleReady = (env) => !!(env.APPLE_ISSUER_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY && env.APPLE_BUNDLE_ID && env.FIREBASE_SERVICE_ACCOUNT);
 // Reads the middle part of a JWS without checking it. Only used to find which transaction to ask
@@ -550,7 +574,10 @@ async function appleToken(env) {
 }
 // Current state of a subscription from Apple. Tries the environment the purchase came from first
 // (TestFlight and App Review buy in Sandbox), then the other one.
-async function appleSubscription(env, transactionId, envHint) {
+// Apple answers with every subscription group this customer has (one per team slot), so pick the
+// subscription the transaction belongs to (same originalTransactionId), not just the newest one.
+async function appleSubscription(env, transactionId, envHint, otidHint) {
+  const want = String(otidHint || '');
   const sandboxOk = String(env.APPLE_SANDBOX || 'on').toLowerCase() !== 'off';
   const order = envHint === 'Sandbox' ? ['Sandbox', 'Production'] : ['Production', 'Sandbox'];
   for (const where of order) {
@@ -562,16 +589,17 @@ async function appleSubscription(env, transactionId, envHint) {
     const d = await r.json();
     if (String(d.bundleId || '') !== String(env.APPLE_BUNDLE_ID).trim()) throw { status: 400, error: 'wrong_app' };
     const products = appleProducts(env);
-    // The newest of our plan subscriptions in the answer (normally there is exactly one).
-    let best = null;
+    // The subscription with the asked-about originalTransactionId; without one, the newest.
+    let best = null, match = null;
     for (const g of d.data || []) for (const last of g.lastTransactions || []) {
       const tx = jwsPayload(last.signedTransactionInfo) || {};
       const ren = jwsPayload(last.signedRenewalInfo) || {};
       if (!products[tx.productId]) continue;
       const s = { status: Number(last.status), otid: String(last.originalTransactionId || tx.originalTransactionId || ''), tx, ren, environment: d.environment || where };
+      if (want && s.otid === want) match = s;
       if (!best || Number(tx.purchaseDate || 0) > Number(best.tx.purchaseDate || 0)) best = s;
     }
-    return best;
+    return match || (want ? null : best);
   }
   return null;
 }
@@ -630,7 +658,10 @@ async function billingTask(task, request, body, env, reply) {
         await root.set('appleTokens/' + t, { teamId: u.teamId, owner: u.uid, at: Date.now() });
         await u.db.patch('config/billing', { appleToken: t });
       }
-      return reply(200, { appAccountToken: t, products: appleProducts(env), owns: bill.appleOtid ? { product: bill.appleProduct || '', plan: u.dir.plan || 'free' } : null });
+      // products: team slot 1 only (older app builds read just this); slots: every slot, for newer builds.
+      const slots = [];
+      for (let s = 1; s <= appleSlotCount(env); s++) slots.push(appleSlotProducts(env, s));
+      return reply(200, { appAccountToken: t, products: appleSlotProducts(env, 1), slots, owns: bill.appleOtid ? { product: bill.appleProduct || '', plan: u.dir.plan || 'free' } : null });
     }
     // iap-link
     const list = (Array.isArray(body.transactions) ? body.transactions : []).slice(0, 10);
@@ -642,7 +673,7 @@ async function billingTask(task, request, body, env, reply) {
       const otid = String(p.originalTransactionId || p.transactionId);
       if (seen.has(otid)) continue;
       seen.add(otid);
-      const sub = await appleSubscription(env, String(p.transactionId), p.environment);
+      const sub = await appleSubscription(env, String(p.transactionId), p.environment, otid);
       if (!sub) continue;
       let teamId = await appleTeamFor(root, sub);
       // No token on the purchase and never linked: it belongs to the team whose owner sent it.
@@ -670,7 +701,7 @@ async function appleNotification(request, env) {
   const tx = jwsPayload(n.data.signedTransactionInfo);
   if (!tx || !tx.transactionId) return ok(200, 'ignored'); // TEST notifications and the like
   try {
-    const sub = await appleSubscription(env, String(tx.transactionId), n.data.environment);
+    const sub = await appleSubscription(env, String(tx.transactionId), n.data.environment, String(tx.originalTransactionId || tx.transactionId));
     if (!sub) return ok(200, 'not ours');
     const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
     const tok = await googleToken(sa);

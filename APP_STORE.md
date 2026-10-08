@@ -47,6 +47,21 @@ Your app → **Monetization → Subscriptions**:
 4. For each one, add a display name and description (localization), and a review screenshot (a screenshot of the Plans screen is fine).
 5. In the group's settings, turn on **Billing Grace Period** (recommended): teams keep their plan while Apple retries a failed card.
 
+### More teams per Apple ID (team slots)
+
+Apple lets one Apple ID hold one subscription per group, so each extra team a coach pays for needs its own group. The app uses the first group that Apple ID isn't already paying in; a team's upgrades and switches stay in its own group.
+
+For team 2, create a group named **Team plans 2** with the same four plans, same prices and same level order, using these product IDs (for team 3, 4 and 5 change `team2` to `team3`, `team4`, `team5`):
+
+| Reference name | Product ID |
+| --- | --- |
+| Team 2 Elite Yearly | `com.kollinmeubanks.thesportshub.team2.elite.yearly` |
+| Team 2 Elite Monthly | `com.kollinmeubanks.thesportshub.team2.elite.monthly` |
+| Team 2 Pro Yearly | `com.kollinmeubanks.thesportshub.team2.pro.yearly` |
+| Team 2 Pro Monthly | `com.kollinmeubanks.thesportshub.team2.pro.monthly` |
+
+Use display names like "Pro (Yearly) – second team" so coaches can tell them apart in their Apple subscriptions. Groups you haven't created yet are simply skipped, and the Worker covers 5 teams per Apple ID unless you set `APPLE_TEAM_SLOTS` (up to 10). Each new group needs metadata and a review screenshot, and goes to App Review with an app version like the first one.
+
 ### Keys for the Worker and the build
 
 App Store Connect → **Users and Access → Integrations**:

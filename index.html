@@ -2853,21 +2853,40 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
   // ---------- Paid plans in the iPhone app (Apple in-app purchases) ----------
   // The Worker hands the owner this team's appAccountToken and the product IDs; every purchase
   // carries the token, so Apple's renewals and cancellations always land on the right team.
-  const IAP = { team: '', token: '', ids: {}, prices: {}, at: 0 };
+  // One Apple ID can hold one subscription per subscription group, so each "team slot" is its own
+  // group with its own four products. slots[i] = { ids: {'pro-month': productId, ...}, prices: {...} }.
+  // ids/prices (slot 1, or the first slot the App Store has) are what the plan cards show.
+  const IAP = { team: '', token: '', ids: {}, prices: {}, slots: [], at: 0 };
   async function iapLoad(force) {
     if (!force && IAP.team === TEAM_ID && Date.now() - IAP.at < 10 * 60 * 1000) return IAP;
     const P = NativePlugin('NativePurchases');
     if (!P) throw { msg: 'Purchases aren’t available in this version of the app.' };
     const r = await workerPost({ task: 'iap-token' });
     if (!r.ok) throw { msg: r.d.error === 'billing_not_configured' ? 'Purchases aren’t set up yet. The app’s owner needs to add the Apple settings to the Worker.' : r.d.error === 'not_owner' ? 'Only the team’s owner can change the plan.' : 'Couldn’t reach the App Store. Try again in a minute.' };
-    const ids = {}, prices = {};
-    for (const pid in r.d.products || {}) { const x = r.d.products[pid]; if (pid && x) ids[x.plan + '-' + x.interval] = pid; }
+    const lists = Array.isArray(r.d.slots) && r.d.slots.length ? r.d.slots : [r.d.products || {}];
+    const slots = lists.map((list) => {
+      const ids = {};
+      for (const pid in list || {}) { const x = list[pid]; if (pid && x) ids[x.plan + '-' + x.interval] = pid; }
+      return { ids, prices: {} };
+    });
     try {
-      const got = await P.getProducts({ productIdentifiers: Object.values(ids), productType: 'subs' });
-      for (const pr of (got && got.products) || []) for (const k in ids) if (ids[k] === pr.identifier) prices[k] = pr.priceString;
+      const all = [].concat(...slots.map((s) => Object.values(s.ids)));
+      const got = await P.getProducts({ productIdentifiers: all, productType: 'subs' });
+      for (const pr of (got && got.products) || []) for (const s of slots) for (const k in s.ids) if (s.ids[k] === pr.identifier) s.prices[k] = pr.priceString;
     } catch (e) { /* prices stay empty; buying says the plan isn't available yet */ }
-    Object.assign(IAP, { team: TEAM_ID, token: String(r.d.appAccountToken || '').toLowerCase(), ids, prices, at: Date.now() });
+    const shown = slots.find((s) => Object.keys(s.prices).length) || slots[0] || { ids: {}, prices: {} };
+    Object.assign(IAP, { team: TEAM_ID, token: String(r.d.appAccountToken || '').toLowerCase(), ids: shown.ids, prices: shown.prices, slots, at: Date.now() });
     return IAP;
+  }
+  // Which team slot a purchase should use: the slot this team already pays in (so an upgrade or a
+  // switch stays one subscription), else the first slot this Apple ID isn't using. -1 = none free.
+  function iapPickSlot(st, purchases, key) {
+    const slotOf = (pid) => st.slots.findIndex((s) => Object.values(s.ids).includes(pid));
+    const active = (purchases || []).filter((x) => x && x.isActive && slotOf(x.productIdentifier) >= 0);
+    const mine = active.find((x) => String(x.appAccountToken || '').toLowerCase() === st.token);
+    if (mine) return { slot: slotOf(mine.productIdentifier), used: active.length };
+    const used = new Set(active.map((x) => slotOf(x.productIdentifier)));
+    return { slot: st.slots.findIndex((s, i) => !used.has(i) && s.ids[key] && s.prices[key]), used: used.size };
   }
   // Sends signed App Store transactions to the Worker, which checks them with Apple and sets the plan.
   async function iapLink(jws) {
@@ -7205,12 +7224,16 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       sh.busy = d.plan; sh.err = ''; renderSheet();
       try {
         const st = await iapLoad(true);
-        const pid = st.ids[d.plan + '-' + interval];
-        if (!pid || !st.prices[d.plan + '-' + interval]) throw { msg: 'This plan isn’t available in the App Store yet. Try again later.' };
-        // One Apple ID can hold one plan at a time. If it's on another team, say so instead of moving it.
+        const key = d.plan + '-' + interval;
+        // Each team this Apple ID pays for uses its own team slot, so one plan never moves another team's.
         const have = await P.getPurchases({ productType: 'subs' }).catch(() => ({ purchases: [] }));
-        const other = (have.purchases || []).find((x) => x.isActive && x.appAccountToken && String(x.appAccountToken).toLowerCase() !== st.token && Object.values(st.ids).includes(x.productIdentifier));
-        if (other) throw { msg: 'Your Apple ID already has a plan on another team, and one Apple ID can pay for one team at a time. Once that plan ends (cancel it in Manage subscription and it ends after the time you paid for), you can buy one here. Or buy this team’s plan with a different Apple ID.' };
+        const pick = iapPickSlot(st, have.purchases, key);
+        const sl = st.slots[pick.slot];
+        if (!sl || !sl.ids[key] || !sl.prices[key]) {
+          if (pick.slot < 0 && pick.used) throw { msg: 'Your Apple ID already pays for ' + pick.used + (pick.used === 1 ? ' team' : ' teams') + ', the most one Apple ID can cover right now. Cancel one in Manage subscription (it ends after the time you paid for), or buy this team’s plan with a different Apple ID.' };
+          throw { msg: 'This plan isn’t available in the App Store yet. Try again later.' };
+        }
+        const pid = sl.ids[key];
         const tx = await P.purchaseProduct({ productIdentifier: pid, productType: 'subs', quantity: 1, appAccountToken: st.token });
         const r = await iapLink([tx && tx.jwsRepresentation]);
         const mine = r && r.find((x) => x.teamId === TEAM_ID);
