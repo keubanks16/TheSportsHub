@@ -33,6 +33,8 @@ async function api(method, path, body) {
     calls++;
     const r = await fetch('https://api.appstoreconnect.apple.com' + path, { method, headers: { Authorization: 'Bearer ' + token(), 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     if (r.status === 429 && i < 8) { await new Promise((ok) => setTimeout(ok, 15000 * (i + 1))); continue; }
+    // Apple's API sometimes answers 5xx for a moment; reads are safe to repeat.
+    if (r.status >= 500 && method === 'GET' && i < 5) { await new Promise((ok) => setTimeout(ok, 5000 * (i + 1))); continue; }
     const text = await r.text();
     const d = text ? JSON.parse(text) : {};
     if (!r.ok) { const e = new Error(method + ' ' + path.split('?')[0] + ' -> ' + r.status + ': ' + (d.errors || []).map((x) => x.detail || x.title).join('; ')); e.status = r.status; throw e; }
@@ -123,7 +125,7 @@ async function main() {
         await api('POST', '/v1/subscriptionAvailabilities', { data: { type: 'subscriptionAvailabilities', attributes: { availableInNewTerritories: true }, relationships: { subscription: rel('subscriptions', sid), availableTerritories: { data: sellIn.map((t) => ({ type: 'territories', id: t })) } } } });
       } catch (e) { if (e.status !== 409) log('  - availability: ' + e.message); }
 
-      if (x.usd) {
+      if (x.usd) try {
         const pts = (await all('/v1/subscriptions/' + sid + '/pricePoints?filter[territory]=USA&limit=200')).data;
         const usPt = pts.find((p) => Number(p.attributes.customerPrice) === Number(x.usd));
         if (!usPt) log('  - no US price point at $' + x.usd);
@@ -139,7 +141,7 @@ async function main() {
           }
           log('  - prices: US $' + x.usd + ', ' + made + ' territories added' + (failed ? ', ' + failed + ' failed' : ''));
         }
-      }
+      } catch (e) { log('  - prices not finished (re-run to retry): ' + e.message); }
 
       if (x.shot && x.shot.attributes && x.shot.attributes.imageAsset) {
         let has = null;
