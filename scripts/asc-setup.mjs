@@ -165,7 +165,10 @@ async function main() {
   if (cfg.removeEU) {
     log('\n## EU availability');
     let av = null;
-    try { av = (await api('GET', '/v1/apps/' + app.id + '/appAvailabilityV2')).data; } catch (e) { log('- could not read availability: ' + e.message); }
+    // The app's availability record shares the app's id.
+    for (const p of ['/v2/appAvailabilities/' + app.id, '/v1/apps/' + app.id + '/appAvailabilityV2']) {
+      try { av = (await api('GET', p)).data; break; } catch (e) { log('- ' + e.message); }
+    }
     if (av) {
       const ta = await all('/v2/appAvailabilities/' + av.id + '/territoryAvailabilities?include=territory&limit=200');
       const eu = ta.data.filter((t) => EU.includes(t.relationships.territory.data.id));
