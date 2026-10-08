@@ -278,6 +278,27 @@ service cloud.firestore {
           && request.resource.data.mute is map && request.resource.data.mute.size() <= 300;
       }
   
+      // Reported chat messages. Any approved member can report a message they can see; coaches
+      // (and the owner) read the reports and delete them once handled. Each person can see and take
+      // back their own report. The app owner sees every report in the Firebase console.
+      match /reports/{id} {
+        allow read: if isAdmin() || (signedIn() && resource.data.by == request.auth.uid);
+        allow create: if (isApproved() || isAdmin())
+          && request.resource.data.keys().hasOnly(['msg', 'msgUid', 'msgName', 'text', 'photo', 'reason', 'by', 'byName', 'at'])
+          && request.resource.data.by == request.auth.uid
+          && request.resource.data.msg is string && request.resource.data.msg.size() <= 64
+          && exists(docPath('messages', request.resource.data.msg))
+          && request.resource.data.msgUid == get(docPath('messages', request.resource.data.msg)).data.uid
+          && request.resource.data.msgUid != request.auth.uid
+          && request.resource.data.msgName is string && request.resource.data.msgName.size() <= 60
+          && request.resource.data.text is string && request.resource.data.text.size() <= 1000
+          && request.resource.data.photo is bool
+          && request.resource.data.reason in ['harassment', 'inappropriate', 'spam', 'other', 'blocked']
+          && request.resource.data.byName is string && request.resource.data.byName.size() <= 60
+          && request.resource.data.at == request.time;
+        allow delete: if isAdmin() || (signedIn() && resource.data.by == request.auth.uid);
+      }
+
       // Team chat: one group conversation for signed-in, approved members (not link-only viewers).
       match /messages/{id} {
         allow read: if isApproved() || isAdmin();

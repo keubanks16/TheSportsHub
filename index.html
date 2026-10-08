@@ -1567,6 +1567,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
     } else if (!(X.isAdmin || X.isCamera) && WorkerSub) { WorkerSub(); WorkerSub = null; X.worker = null; }
     if (chatAllowed() && !Chat.sub) chatSubscribe();
     muteSync();
+    reportsSync();
     newsSync();
     gallerySync(false);
     invitesSync();
@@ -1975,7 +1976,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       h += `<div class="row"><div class="grow"><b>${esc((X.member && X.member.name) || X.user.displayName || X.user.email)}</b><div class="small muted">${esc(X.user.email || '')} · ${esc(role)}</div></div><button class="btn sm" data-act="teamSwitch">Switch team</button><button class="btn sm" data-act="signOut">Sign out</button></div>`;
       if (chatAllowed()) {
         const muted = mutedList();
-        h += `<div class="hr"></div><div class="row" id="muted"><div class="grow"><b>Muted in team chat</b><div class="small muted">${muted.length ? esc(muted.map(([, n]) => n).join(', ')) : 'Nobody. To mute someone, tap one of their messages in Chat.'}</div></div>${muted.length ? '<button class="btn sm" data-act="muteManage">Manage</button>' : ''}</div>`;
+        h += `<div class="hr"></div><div class="row" id="muted"><div class="grow"><b>Blocked in team chat</b><div class="small muted">${muted.length ? esc(muted.map(([, n]) => n).join(', ')) : 'Nobody. To block someone, tap one of their messages in Chat.'}</div></div>${muted.length ? '<button class="btn sm" data-act="muteManage">Manage</button>' : ''}</div>`;
       }
     } else {
       h += '<div class="row"><span class="grow">Coaches sign in here to score games.</span><button class="btn sm primary" data-act="authOpen" data-mode="signin">Sign in</button></div>';
@@ -2351,6 +2352,40 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       toast(e && e.code === 'permission-denied' ? 'Couldn’t save that. Check that the latest security rules are published.' : 'Couldn’t save that. Check your connection and try again.');
     });
   }
+  // ---------- Reporting chat messages ----------
+  // reports/{id}: { msg, msgUid, msgName, text, photo, reason, by, byName, at }. Anyone approved can
+  // report someone else's message (blocking someone files one too, with reason 'blocked'). Coaches
+  // see the open reports at the top of Chat and delete the message or dismiss the report.
+  const Reports = { sub: null, list: [] };
+  const REPORT_REASONS = [['harassment', 'Harassment or bullying'], ['inappropriate', 'Inappropriate or offensive'], ['spam', 'Spam'], ['other', 'Something else']];
+  const REPORT_NAME = { harassment: 'Harassment or bullying', inappropriate: 'Inappropriate or offensive', spam: 'Spam', other: 'Something else', blocked: 'Blocked the sender' };
+  function reportsSync() {
+    const want = chatAllowed() && Access.isAdmin;
+    if (want && !Reports.sub) {
+      const q = FB.F.query(teamCollection('reports'), FB.F.orderBy('at', 'desc'), FB.F.limit(100));
+      Reports.sub = FB.F.onSnapshot(q, (snap) => {
+        Reports.list = snap.docs.map((d) => {
+          const x = d.data({ serverTimestamps: 'estimate' }) || {};
+          const at = x.at && typeof x.at.toMillis === 'function' ? x.at.toMillis() : Number(x.at) || Date.now();
+          return { id: d.id, msg: String(x.msg || ''), msgUid: String(x.msgUid || ''), msgName: String(x.msgName || 'Team member'), text: String(x.text || ''), photo: !!x.photo, reason: String(x.reason || 'other'), byName: String(x.byName || 'A team member'), at };
+        });
+        scheduleRender();
+        if (UI.sheet && UI.sheet.type === 'reports') renderSheet();
+      }, () => {});
+    } else if (!want && Reports.sub) { Reports.sub(); Reports.sub = null; Reports.list = []; }
+  }
+  function reportSend(m, reason) {
+    return FB.F.addDoc(teamCollection('reports'), {
+      msg: m.id, msgUid: m.uid, msgName: String(m.name || 'Team member').slice(0, 60), text: String(m.text || '').slice(0, 1000), photo: !!m.photo,
+      reason, by: Access.user.uid, byName: chatName().slice(0, 60), at: FB.F.serverTimestamp()
+    });
+  }
+  // The coaches' banner at the top of Chat.
+  function reportsBannerHTML() {
+    if (!Access.isAdmin || !Reports.list.length) return '';
+    const n = new Set(Reports.list.map((r) => r.msg)).size;
+    return `<div class="card row" style="padding:10px 14px;margin-bottom:10px;border-left:4px solid var(--bad, #C0392B)"><div class="grow"><b>${n} reported message${n === 1 ? '' : 's'}</b><div class="small muted">Review and remove anything that breaks your team’s rules.</div></div><button class="btn sm primary" data-act="reportsOpen">Review</button></div>`;
+  }
   function msgFromDoc(d) {
     const x = d.data({ serverTimestamps: 'estimate' }) || {};
     const at = x.at && typeof x.at.toMillis === 'function' ? x.at.toMillis() : Number(x.at) || Date.now();
@@ -2412,13 +2447,13 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
   function renderChat() {
     if (!chatAllowed()) return `<div class="card empty"><img src="${LOGO}" alt=""><h3>Team chat</h3><p>Sign in with an approved account to see the team chat.</p>${Access.user ? '' : '<button class="btn primary" data-act="authOpen" data-mode="signin">Sign in</button>'}</div>`;
     if (!Chat.loaded) return talkTabsHTML() + '<div class="loading"><div>Loading the team chat…</div></div>';
-    if (!Chat.list.length) return talkTabsHTML() + `<div class="card empty"><h3>Team chat</h3><p>One conversation for coaches and players' families. Say hi to the team.</p></div>`;
+    if (!Chat.list.length) return talkTabsHTML() + reportsBannerHTML() + `<div class="card empty"><h3>Team chat</h3><p>One conversation for coaches and players' families. Say hi to the team.</p></div>`;
     const me = Access.user.uid;
-    let h = talkTabsHTML() + '<div class="chat">', lastDay = '', prev = null, run = null;
+    let h = talkTabsHTML() + reportsBannerHTML() + '<div class="chat">', lastDay = '', prev = null, run = null;
     // Messages from someone you muted fold into one quiet line you can open.
     const flush = () => {
       if (!run) return;
-      h += `<div class="chat-muted">${MUTE_ICON}<span>${run.n} message${run.n === 1 ? '' : 's'} from ${esc(run.name)} (muted)</span><button class="btn ghost sm" data-act="muteShow" data-uid="${esc(run.uid)}">Show</button></div>`;
+      h += `<div class="chat-muted">${MUTE_ICON}<span>${run.n} message${run.n === 1 ? '' : 's'} from ${esc(run.name)} (blocked)</span><button class="btn ghost sm" data-act="muteShow" data-uid="${esc(run.uid)}">Show</button></div>`;
       run = null; prev = null;
     };
     for (const m of Chat.list) {
@@ -2436,7 +2471,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       const grouped = prev && prev.uid === m.uid && m.at - prev.at < 5 * 60 * 1000;
       const sel = Chat.delId === m.id;
       h += `<div class="msg${mine ? ' me' : ''}${grouped ? ' grouped' : ''}${sel ? ' sel' : ''}${hush ? ' hushed' : ''}" data-act="msgTap" data-id="${esc(m.id)}">`;
-      if (!grouped) h += `<div class="msg-meta">${mine ? '' : `<b>${esc(m.name)}</b>${m.coach ? '<span class="chip">Coach</span>' : ''}${hush ? '<span class="chip">Muted</span>' : ''} · `}${esc(chatTime(m.at))}</div>`;
+      if (!grouped) h += `<div class="msg-meta">${mine ? '' : `<b>${esc(m.name)}</b>${m.coach ? '<span class="chip">Coach</span>' : ''}${hush ? '<span class="chip">Blocked</span>' : ''} · `}${esc(chatTime(m.at))}</div>`;
       if (m.photo) {
         const u = chatPhotoUrl(m.photo.key);
         const ar = m.photo.w && m.photo.h ? Math.min(2, Math.max(0.5, m.photo.w / m.photo.h)) : 0.75;
@@ -2448,7 +2483,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
         const nm = esc(String(m.name || 'them').slice(0, 30));
         h += reactPickHTML(m, 'react-pick') + reactWhoHTML(m);
         h += '<div class="msg-acts">'
-          + (mine ? '' : hush ? `<button class="btn sm" data-act="msgUnmute" data-id="${esc(m.id)}">Unmute ${nm}</button><button class="btn sm ghost" data-act="muteHide" data-uid="${esc(m.uid)}">Hide</button>` : `<button class="btn sm" data-act="msgMute" data-id="${esc(m.id)}">Mute ${nm}</button>`)
+          + (mine ? '' : hush ? `<button class="btn sm" data-act="msgUnmute" data-id="${esc(m.id)}">Unblock ${nm}</button><button class="btn sm ghost" data-act="muteHide" data-uid="${esc(m.uid)}">Hide</button>` : `<button class="btn sm" data-act="msgReport" data-id="${esc(m.id)}">Report</button><button class="btn sm" data-act="msgMute" data-id="${esc(m.id)}">Block ${nm}</button>`)
           + (mine || Access.isAdmin ? `<button class="btn sm danger" data-act="msgDelete" data-id="${esc(m.id)}">Delete message</button>` : '')
           + '<button class="btn sm ghost" data-act="msgCancel">Cancel</button></div>';
       }
@@ -2457,7 +2492,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
     }
     flush();
     // Deleting and muting are a tap on the message, which nobody would guess, so say so until they've done one.
-    if (!Chat.delId && !chatDelHintDone()) h += `<div class="chat-hint">${Access.isAdmin ? 'Tap a message to react 👍, delete it or mute someone' : 'Tap a message to react 👍, delete yours, or mute someone'}</div>`;
+    if (!Chat.delId && !chatDelHintDone()) h += `<div class="chat-hint">${Access.isAdmin ? 'Tap a message to react 👍, delete it, report it or block someone' : 'Tap a message to react 👍, delete yours, report one or block someone'}</div>`;
     return h + '</div>';
   }
   async function chatSend() {
@@ -2734,8 +2769,8 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       }
       h += '</div></div>';
     }
-    if (hidden) h += `<div class="chat-muted">${MUTE_ICON}<span>${hidden} photo${hidden === 1 ? '' : 's'} from people you muted</span><button class="btn ghost sm" data-act="photosMuted">Show</button></div>`;
-    else if (Gallery.showMuted && all.some((m) => isMuted(m.uid))) h += '<div class="row" style="justify-content:center"><button class="btn ghost sm" data-act="photosMuted">Hide photos from people you muted</button></div>';
+    if (hidden) h += `<div class="chat-muted">${MUTE_ICON}<span>${hidden} photo${hidden === 1 ? '' : 's'} from people you blocked</span><button class="btn ghost sm" data-act="photosMuted">Show</button></div>`;
+    else if (Gallery.showMuted && all.some((m) => isMuted(m.uid))) h += '<div class="row" style="justify-content:center"><button class="btn ghost sm" data-act="photosMuted">Hide photos from people you blocked</button></div>';
     if (Gallery.err) h += '<p class="small muted" style="margin:0 4px">Showing photos from the latest 300 chat messages. Older ones couldn’t load right now.</p>';
     return h;
   }
@@ -4759,6 +4794,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       return head(titles[sh.mode]) + intro + f
         + (sh.msg ? `<div class="small" style="color:var(--good);font-weight:600">${esc(sh.msg)}</div>` : '')
         + (sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : '')
+        + (sh.mode === 'signup' || sh.mode === 'setup' || sh.mode === 'account' ? `<p class="small muted" style="margin:0">By creating an account you agree to the ${legalLink(APP.termsUrl || 'terms.html', 'Terms of Use')}, including no abusive or objectionable content, and the ${legalLink(APP.privacyUrl || 'privacy.html', 'Privacy Policy')}.</p>` : '')
         + `<div class="row"><button class="btn primary" data-act="authSubmit" ${sh.busy ? 'disabled' : ''}>${sh.busy ? 'Working…' : btn}</button></div>` + links;
     },
     news(sh) {
@@ -4770,9 +4806,31 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
     },
     mutes() {
       const list = mutedList();
-      return head('Muted in team chat') + `<p class="small muted" style="margin:0">You don’t see their messages or get notified when they post. They aren’t told, and only you see this list.</p>
-        ${list.length ? `<div class="card" style="padding:0 14px;box-shadow:none">${list.map(([u, n]) => `<div class="who" style="cursor:default"><span class="nm"><b>${esc(n)}</b></span><button class="btn sm" data-act="muteOff" data-uid="${esc(u)}">Unmute</button></div>`).join('')}</div>` : '<p class="muted" style="margin:0">Nobody is muted.</p>'}
+      return head('Blocked in team chat') + `<p class="small muted" style="margin:0">You don’t see their messages or photos or get notified when they post. They aren’t told, and only you see this list.</p>
+        ${list.length ? `<div class="card" style="padding:0 14px;box-shadow:none">${list.map(([u, n]) => `<div class="who" style="cursor:default"><span class="nm"><b>${esc(n)}</b></span><button class="btn sm" data-act="muteOff" data-uid="${esc(u)}">Unblock</button></div>`).join('')}</div>` : '<p class="muted" style="margin:0">Nobody is blocked.</p>'}
         <div class="row"><button class="btn" data-act="close">Done</button></div>`;
+    },
+    report(sh) {
+      const opts = REPORT_REASONS.map(([k, l]) => `<label class="row" style="gap:10px;cursor:pointer"><input type="radio" name="report-reason" data-act="reportReason" data-v="${k}"${sh.reason === k ? ' checked' : ''}><span>${esc(l)}</span></label>`).join('');
+      return head('Report message') + `<p class="small muted" style="margin:0">Your team’s coaches will see this message and who reported it, so they can remove it. ${esc(sh.name)} isn’t told.</p>
+        ${sh.preview ? `<div class="card" style="padding:10px 14px;box-shadow:none"><div class="small muted">${esc(sh.name)}</div><div>${esc(sh.preview)}</div></div>` : ''}
+        <div class="stack">${opts}</div>
+        <label class="row" style="gap:10px;cursor:pointer"><input type="checkbox" data-act="reportBlock"${sh.block ? ' checked' : ''}><span>Also block ${esc(sh.name)}</span></label>
+        ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
+        <div class="row"><button class="btn danger" data-act="reportSubmit" ${sh.busy ? 'disabled' : ''}>${sh.busy ? 'Sending…' : 'Report'}</button><button class="btn" data-act="close">Cancel</button></div>`;
+    },
+    reports() {
+      if (!Reports.list.length) return head('Reported messages') + '<p class="muted" style="margin:0">No open reports.</p><div class="row"><button class="btn" data-act="close">Done</button></div>';
+      const by = new Map();
+      for (const r of Reports.list) { if (!by.has(r.msg)) by.set(r.msg, []); by.get(r.msg).push(r); }
+      const rows = [...by.values()].map((rs) => {
+        const r = rs[0], live = Chat.list.find((x) => x.id === r.msg);
+        const who = [...new Set(rs.map((x) => x.byName + ' (' + (REPORT_NAME[x.reason] || x.reason) + ')'))].join(', ');
+        const body = r.text ? esc(r.text) : r.photo ? '<i>Photo</i>' : '<i>No text</i>';
+        return `<div class="card stack" style="padding:12px 14px;box-shadow:none"><div><b>${esc(r.msgName)}</b> <span class="small muted">· ${esc(chatDay(r.at))}</span></div><div>${body}</div><div class="small muted">Reported by ${esc(who)}</div>
+          <div class="row" style="gap:8px">${live ? `<button class="btn sm danger" data-act="reportDelete" data-id="${esc(r.msg)}">Delete message</button>` : '<span class="small muted">Message already deleted.</span>'}<button class="btn sm" data-act="reportDismiss" data-id="${esc(r.msg)}">Dismiss</button></div></div>`;
+      }).join('');
+      return head('Reported messages') + `<p class="small muted" style="margin:0">Deleting removes the message for everyone. Dismissing keeps the message and clears the report.</p>${rows}<div class="row"><button class="btn" data-act="close">Done</button></div>`;
     },
     member(sh) {
       const m = Access.members.find((x) => x.uid === sh.uid);
@@ -6223,15 +6281,62 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
       if (!m) return;
       Chat.delId = null;
       try { localStorage.setItem(CHAT_DELHINT, '1'); } catch (e) { /* per-device only */ }
-      muteSet(m.uid, m.name, true);
-      toast('Muted ' + (/[.!?]$/.test(m.name) ? m.name : m.name + '.') + ' They won’t know. Unmute anytime.');
+      confirmSheet('Block ' + String(m.name || 'this person').slice(0, 40) + '?', 'Their messages and photos are hidden from you right away and you won’t be notified when they post. They aren’t told. Your team’s coaches are told about the message so they can review it. Unblock anytime from Team → Account.', 'Block', () => {
+        muteSet(m.uid, m.name, true);
+        reportSend(m, 'blocked').catch(() => {});
+        toast('Blocked ' + m.name);
+      }, true);
+    },
+    msgReport(d) {
+      const m = Chat.list.find((x) => x.id === d.id);
+      if (!m || !chatAllowed() || m.uid === Access.user.uid) return;
+      Chat.delId = null;
+      try { localStorage.setItem(CHAT_DELHINT, '1'); } catch (e) { /* per-device only */ }
+      openSheet({ type: 'report', id: m.id, name: String(m.name || 'Team member').slice(0, 40), preview: m.text ? m.text.slice(0, 200) : m.photo ? 'Photo' : '', reason: '', block: false, err: '', busy: false });
+    },
+    reportReason(d) { if (UI.sheet && UI.sheet.type === 'report') { const re = !!UI.sheet.err; UI.sheet.reason = d.v; UI.sheet.err = ''; if (re) renderSheet(); } },
+    reportBlock(d, el) { if (UI.sheet && UI.sheet.type === 'report') UI.sheet.block = !!(el && el.checked); },
+    async reportSubmit() {
+      const sh = UI.sheet;
+      if (!sh || sh.type !== 'report' || sh.busy) return;
+      if (!sh.reason) { sh.err = 'Pick a reason.'; return renderSheet(); }
+      const m = Chat.list.find((x) => x.id === sh.id);
+      if (!m) { closeSheet(); toast('That message was already deleted.'); return; }
+      sh.busy = true; sh.err = ''; renderSheet();
+      try {
+        await reportSend(m, sh.reason);
+        if (sh.block) muteSet(m.uid, m.name, true);
+        closeSheet();
+        toast(sh.block ? 'Reported and blocked. Thanks for letting your coaches know.' : 'Reported. Thanks for letting your coaches know.');
+      } catch (e) {
+        sh.busy = false;
+        sh.err = e && e.code === 'permission-denied' ? 'Couldn’t send the report. Check that the latest security rules are published.' : 'Couldn’t send the report. Check your connection and try again.';
+        if (UI.sheet === sh) renderSheet();
+      }
+    },
+    reportsOpen() { if (Access.isAdmin) openSheet({ type: 'reports' }); },
+    async reportDismiss(d) {
+      const rs = Reports.list.filter((r) => r.msg === d.id);
+      try { await Promise.all(rs.map((r) => FB.F.deleteDoc(teamDoc('reports', r.id)))); toast('Report dismissed'); }
+      catch (e) { toast('Couldn’t dismiss that. Check your connection and try again.'); }
+    },
+    reportDelete(d) {
+      const m = Chat.list.find((x) => x.id === d.id);
+      confirmSheet('Delete this message?', 'It’s removed for everyone, and the report is cleared.', 'Delete', async () => {
+        try {
+          if (m) await chatDeleteMsg(m);
+          await Promise.all(Reports.list.filter((r) => r.msg === d.id).map((r) => FB.F.deleteDoc(teamDoc('reports', r.id))));
+          toast('Message deleted');
+        } catch (e) { toast(e && e.code === 'permission-denied' ? 'Couldn’t delete. Check that the latest security rules are published.' : 'Couldn’t delete that message. Check your connection and try again.'); }
+        if (Reports.list.some((r) => r.msg !== d.id)) openSheet({ type: 'reports' });
+      }, true);
     },
     msgUnmute(d) {
       const m = Chat.list.find((x) => x.id === d.id);
       if (!m) return;
       Chat.delId = null;
       muteSet(m.uid, m.name, false);
-      toast('Unmuted ' + m.name);
+      toast('Unblocked ' + m.name);
     },
     muteShow(d) { Chat.show.add(d.uid); render(); },
     drillsOpen() { if (!drillsAllowed()) return; UI.tab = 'drills'; render(); window.scrollTo(0, 0); },
@@ -6276,7 +6381,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
     },
     muteHide(d) { Chat.show.delete(d.uid); Chat.delId = null; render(); },
     muteManage() { openSheet({ type: 'mutes' }); },
-    muteOff(d) { const n = Chat.mute[d.uid] || 'them'; muteSet(d.uid, n, false); toast('Unmuted ' + n); },
+    muteOff(d) { const n = Chat.mute[d.uid] || 'them'; muteSet(d.uid, n, false); toast('Unblocked ' + n); },
     photoOpen(d) { viewerOpen(d.id); },
     viewerGo(d) { viewerOpen(d.id); },
     photosMuted() { Gallery.showMuted = !Gallery.showMuted; render(); },

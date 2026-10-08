@@ -159,7 +159,7 @@ The **Chat** tab has two tabs at the top: **Announcements** and **Team chat**. O
 
 - **Coaches:** Chat → **Announcements → New announcement**, write it, and tap **Post**. Links become tappable. Coaches can **Edit** or **Delete** any announcement (editing doesn't send a second notification).
 - **Families** see a banner on the Games tab with the newest announcement they haven't read, a red dot on Chat, and a **New** tag on each unread announcement. Tapping **Chat** opens Announcements first when there's one they haven't read.
-- **Notifications:** everyone with notifications on gets each announcement, even if they turned team chat notifications off or muted that coach in the chat.
+- **Notifications:** everyone with notifications on gets each announcement, even if they turned team chat notifications off or blocked that coach in the chat.
 
 Needs the latest `firestore.rules` published, and the latest `worker.js` for the notifications.
 
@@ -171,9 +171,14 @@ The **Chat** tab is one group conversation for everyone with an approved account
 
 Tap a message, then tap 👍, 👎, ❤️ or ⚾️ in the row that pops up. The counts show under the message; tap one of those to add the same reaction (or take yours back). Each person gets one reaction per message, so picking a different one switches it. When a message is selected, it lists who reacted, like "Coach Ray ❤️, Dana Ruiz 👍". Photos have the same four buttons in the full-screen view. Reactions don't send notifications. Needs the latest `firestore.rules` published.
 
-### Muting someone
+### Reporting and blocking
 
-Anyone can mute anyone in the chat, anytime. Tap one of their messages, then **Mute**. Their messages fold into a quiet "messages from … (muted)" line you can open with **Show**, and you stop getting notifications when they post. Muting only changes what *you* see. They aren't told, they can still post, and everyone else still sees their messages. To unmute, tap one of their messages after **Show**, or go to **Team → Account → Muted in team chat → Manage**. Your mute list follows your account to every phone you sign in on. It needs the latest `firestore.rules` published (and the latest `worker.js` for the notification part).
+Tap any message from someone else for **Report** and **Block**.
+
+- **Report** asks for a reason (harassment, inappropriate, spam, something else) and can block the sender at the same time. The team's coaches see a **reported messages** banner at the top of Chat; **Review** lists each reported message with who reported it, and they **Delete message** (removed for everyone) or **Dismiss**. Every report is also in Firestore under `teams/{team}/reports`.
+- **Block** hides that person's messages and photos from you right away and stops notifications from them. They aren't told and everyone else still sees their messages. Blocking also files a report so coaches can review the message. Blocked messages fold into a "messages from … (blocked)" line you can open with **Show**. To unblock, go to **Team → Account → Blocked in team chat → Manage**. Your block list follows your account to every phone.
+
+Both need the latest `firestore.rules` published.
 
 ### Photos in the chat
 
