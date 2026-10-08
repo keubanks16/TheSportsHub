@@ -68,6 +68,15 @@ async function main() {
     log('- Group "' + g.attributes.referenceName + '": ' + subs.map((s) => s.attributes.productId + ' [' + s.attributes.state + ', level ' + s.attributes.groupLevel + ']').join(', '));
   }
   if (cfg.mode === 'verify') {
+    log('\n## Groups');
+    for (const { g, subs } of info) {
+      const gl = (await all('/v1/subscriptionGroups/' + g.id + '/subscriptionGroupLocalizations?limit=50')).data;
+      log('- ' + g.attributes.referenceName + ': display ' + (gl.map((l) => l.attributes.locale + ' "' + l.attributes.name + '" [' + l.attributes.state + ']').join(', ') || 'NONE'));
+      for (const s of subs.slice(0, 1).concat(subs.filter((x) => /pro\.yearly$/.test(x.attributes.productId)))) {
+        const sl = (await all('/v1/subscriptions/' + s.id + '/subscriptionLocalizations?limit=50')).data;
+        log('  - ' + s.attributes.productId + ' attrs ' + JSON.stringify(s.attributes) + ' locs ' + JSON.stringify(sl.map((l) => l.attributes)));
+      }
+    }
     log('\n## Every plan');
     log('| Product | State | Sold in | US price | Name | Review screenshot |\n| --- | --- | --- | --- | --- | --- |');
     for (const { subs } of info) for (const s of subs) {
