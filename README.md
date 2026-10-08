@@ -12,7 +12,7 @@ It's built to be sold to many teams at once. Every team brands it as their own a
 - **Team switcher.** The **Teams** button at the top (or tapping the team name) lists every team you're on, with logo, your role and whether you're still waiting for approval. Tap one to switch. A new phone opens the team you used last.
 - **Team code and join link.** Coaches see the team code on the Team tab, with **Copy code** and **Share join link**.
 - **Practice attendance.** On the Practice tab, coaches tap **Attendance** on any practice and mark each player Present or Absent (or **Everyone present**). Each player gets an attendance % and a row of green/red squares, plus a team %. Families see only their own player's record and the team %.
-- **Paid plans.** Free, Pro and Elite per team, with Stripe checkout, a Manage billing button, and features that lock and unlock on their own. See SETUP.md, Paid plans.
+- **Paid plans.** Free, Pro and Elite per team, sold as App Store subscriptions in the iPhone app, and features that lock and unlock on their own. See SETUP.md, Paid plans.
 - **Expandable lists.** On the Team tab, the **Roster**, **Coaches & staff**, **Families** and **Opponent rosters** show the first few names with **Show all** to expand and **Show less** to fold back. Each heading shows the count.
 
 ## Setting it up
@@ -158,7 +158,7 @@ The **Chat** tab has two tabs at the top: **Announcements** and **Team chat**. O
 
 - **Coaches:** Chat → **Announcements → New announcement**, write it, and tap **Post**. Links become tappable. Coaches can **Edit** or **Delete** any announcement (editing doesn't send a second notification).
 - **Families** see a banner on the Games tab with the newest announcement they haven't read, a red dot on Chat, and a **New** tag on each unread announcement. Tapping **Chat** opens Announcements first when there's one they haven't read.
-- **Notifications:** everyone with notifications on gets each announcement, even if they turned team chat notifications off or muted that coach in the chat.
+- **Notifications:** everyone with notifications on gets each announcement, even if they turned team chat notifications off or blocked that coach in the chat.
 
 Needs the latest `firestore.rules` published, and the latest `worker.js` for the notifications.
 
@@ -170,9 +170,14 @@ The **Chat** tab is one group conversation for everyone with an approved account
 
 Tap a message, then tap 👍, 👎, ❤️ or ⚾️ in the row that pops up. The counts show under the message; tap one of those to add the same reaction (or take yours back). Each person gets one reaction per message, so picking a different one switches it. When a message is selected, it lists who reacted, like "Coach Ray ❤️, Dana Ruiz 👍". Photos have the same four buttons in the full-screen view. Reactions don't send notifications. Needs the latest `firestore.rules` published.
 
-### Muting someone
+### Reporting and blocking
 
-Anyone can mute anyone in the chat, anytime. Tap one of their messages, then **Mute**. Their messages fold into a quiet "messages from … (muted)" line you can open with **Show**, and you stop getting notifications when they post. Muting only changes what *you* see. They aren't told, they can still post, and everyone else still sees their messages. To unmute, tap one of their messages after **Show**, or go to **Team → Account → Muted in team chat → Manage**. Your mute list follows your account to every phone you sign in on. It needs the latest `firestore.rules` published (and the latest `worker.js` for the notification part).
+Tap any message from someone else for **Report** and **Block**.
+
+- **Report** asks for a reason (harassment, inappropriate, spam, something else) and can block the sender at the same time. The team's coaches see a **reported messages** banner at the top of Chat; **Review** lists each reported message with who reported it, and they **Delete message** (removed for everyone) or **Dismiss**. Every report is also in Firestore under `teams/{team}/reports`.
+- **Block** hides that person's messages and photos from you right away and stops notifications from them. They aren't told and everyone else still sees their messages. Blocking also files a report so coaches can review the message. Blocked messages fold into a "messages from … (blocked)" line you can open with **Show**. To unblock, go to **Team → Account → Blocked in team chat → Manage**. Your block list follows your account to every phone.
+
+Both need the latest `firestore.rules` published.
 
 ### Photos in the chat
 
@@ -278,7 +283,7 @@ Roster photo scanning, scouting reports, the built-in camera, chat photos, fee r
 | `CF_ACCOUNT_ID` | Text | Built-in camera (your Cloudflare account ID) |
 | `FIREBASE_SERVICE_ACCOUNT` | Secret | Phone notifications, chat photos and tournament fees (see [Notifications](#notifications)) |
 | `ALLOWED_ORIGIN` | Text | **Required.** Your app's address, e.g. `https://app.yourdomain.com` (comma-separate several) |
-| `STRIPE_*`, `COMP_TEAMS`, `PLANS` | | Paid plans (see SETUP.md, Paid plans) |
+| `COMP_TEAMS`, `PLANS` | | Paid plans (see SETUP.md, Paid plans) |
 | `APP_NAME` | Text | Optional. Your app's name in notifications |
 | `TEAM_IDS` | Text | Optional. Teams are found automatically; not needed |
 

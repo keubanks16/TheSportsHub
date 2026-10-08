@@ -10,6 +10,7 @@
 //   photos  team chat photos: store them in R2, hand out short-lived viewing links, delete them.
 //           Only signed-in, approved members can send or see them.
 //   fees    tournament fee reminder notifications to families who haven't paid yet.
+//   account-delete  deletes the signed-in person's account and their data (App Store requirement).
 //
 // Set these in the Worker's Settings -> Variables and Secrets:
 //   ACCESS_CODE        Secret  any passphrase you make up. Optional for coaches: signed-in team coaches
@@ -21,14 +22,11 @@
 // and under Settings -> Bindings add an R2 bucket with the variable name PHOTOS (chat photos),
 // and under Settings -> Triggers add a Cron Trigger that runs every minute (* * * * *).
 //   ALLOWED_ORIGIN     Text    REQUIRED: your app's address(es), comma separated, e.g. https://app.example.com
-//   Paid plans (Free / Pro / Elite, per team) through Stripe:
-//   STRIPE_SECRET_KEY        Secret  Stripe -> Developers -> API keys -> Secret key (sk_live_... or sk_test_...)
-//   STRIPE_WEBHOOK_SECRET    Secret  Stripe -> Developers -> Webhooks -> your endpoint -> Signing secret (whsec_...)
-//   STRIPE_PRICE_PRO_MONTH, STRIPE_PRICE_PRO_YEAR, STRIPE_PRICE_ELITE_MONTH, STRIPE_PRICE_ELITE_YEAR
-//                            Text    the price IDs (price_...) of your four Stripe prices
+//   Paid plans (Free / Pro / Elite, per team). Subscriptions are sold through Apple In-App Purchase;
+//   a team's plan is teams/{id}.plan (set by the app owner in the Firebase console until the
+//   App Store purchase hookup writes it).
 //   PLANS                    Text    optional; "off" = every team gets everything (no plans)
 //   COMP_TEAMS               Text    optional; comma-separated team codes that always get Elite (your own teams)
-//   Webhook address to give Stripe: https://<your-worker>/stripe-webhook
 //   TEAM_IDS           Text    optional; teams are found automatically. Only needed for very old teams.
 //   MODEL              Text    optional; defaults to claude-sonnet-5-5
 //   APP_NAME           Text    optional; your app's name in notifications (defaults to The Sports Hub)
@@ -43,7 +41,6 @@ const MAX_IMAGE_B64 = 6000000; // about 4.5 MB per image
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const PHOTO_TASKS = ['photo-urls', 'photo-delete'];
 const PAY_TASKS = ['fee-remind'];
-const BILLING_TASKS = ['billing-checkout', 'billing-portal'];
 // ---------- Plans ----------
 // Which plan each server-side feature needs. The team's plan is teams/{id}.plan, written only here.
 const PLAN_ORDER = ['free', 'pro', 'elite'];
@@ -81,8 +78,6 @@ export default {
       return new Response('{}', { headers: { 'content-type': 'application/json' } });
     }
     const here = new URL(request.url);
-    // Stripe tells us about payments here (signed with STRIPE_WEBHOOK_SECRET; no browser involved).
-    if (request.method === 'POST' && here.pathname === '/stripe-webhook') return stripeWebhook(request, env);
     // Chat photos are shown with plain <img> links, so they're checked by a signature, not a sign-in.
     if (request.method === 'GET' && here.pathname.startsWith('/p/')) return photoServe(here, env);
     const origin = request.headers.get('Origin') || '';
@@ -116,7 +111,7 @@ export default {
     // Team members prove who they are with their Hub sign-in, not the coaches' access code.
     if (PHOTO_TASKS.includes(task)) return photoTask(task, request, body, env, reply, ctx, here.origin, allowed[0]);
     if (PAY_TASKS.includes(task)) return payTask(task, request, body, env, reply, allowed);
-    if (BILLING_TASKS.includes(task)) return billingTask(task, request, body, env, reply, allowed);
+    if (task === 'account-delete') return accountDelete(request, body, env, reply);
     // Coaches (and camera operators, for live video) are recognized by their sign-in for their team.
     // The shared ACCESS_CODE still works for setups that use it.
     const codeOk = !!env.ACCESS_CODE && sameText(request.headers.get('x-gs-code') || '', String(env.ACCESS_CODE));
@@ -411,7 +406,7 @@ async function googleToken(sa) {
   if (GTOK && GTOK.email === sa.client_email && GTOK.exp > Date.now() + 120000) return GTOK.token;
   const now = Math.floor(Date.now() / 1000);
   const enc = (o) => b64url(new TextEncoder().encode(JSON.stringify(o)));
-  const unsigned = enc({ alg: 'RS256', typ: 'JWT' }) + '.' + enc({ iss: sa.client_email, scope: 'https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/datastore', aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600 });
+  const unsigned = enc({ alg: 'RS256', typ: 'JWT' }) + '.' + enc({ iss: sa.client_email, scope: 'https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/cloud-platform', aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600 });
   const der = Uint8Array.from(atob(String(sa.private_key).replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')), (c) => c.charCodeAt(0));
   const key = await crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
   const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(unsigned));
@@ -506,99 +501,125 @@ function firestore(pid, tok, teamId) {
   };
 }
 
-// ---------- Paid plans (Stripe) ----------
-async function stripe(env, method, path, params) {
-  const body = params ? new URLSearchParams(params).toString() : undefined;
-  const r = await fetch('https://api.stripe.com/v1/' + path + (method === 'GET' && body ? '?' + body : ''), {
-    method, headers: { Authorization: 'Bearer ' + env.STRIPE_SECRET_KEY, 'content-type': 'application/x-www-form-urlencoded' }, body: method === 'GET' ? undefined : body
-  });
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw { status: 502, error: 'stripe', detail: (d.error && d.error.message) || ('Stripe ' + r.status) };
-  return d;
+// ---------- Delete account ----------
+// The signed-in person deletes their own account (App Store guideline 5.1.1(v)). For every team in
+// their My Teams list: their member record, settings, phone tokens, watch links, chat messages
+// (and chat photos) and reports are deleted. A team they own goes to the longest-serving other
+// coach; if there is none, the whole team is deleted. Last, the sign-in itself is deleted.
+const TEAM_COLLECTIONS = ['members', 'guests', 'invites', 'pushTokens', 'prefs', 'messages', 'reports', 'announcements',
+  'games', 'opponents', 'practices', 'team', 'swings', 'swingMedia', 'fees', 'config'];
+function fsRoot(pid, tok) {
+  const root = 'https://firestore.googleapis.com/v1/projects/' + pid + '/databases/(default)/documents';
+  const H = { Authorization: 'Bearer ' + tok, 'content-type': 'application/json' };
+  const out = (d) => Object.assign(fsObj(d.fields), { _id: d.name.split('/').pop(), _name: d.name });
+  const api = {
+    async get(path) { const r = await fetch(root + '/' + path, { headers: H }); if (r.status === 404) return null; if (!r.ok) throw new Error('get ' + r.status); return out(await r.json()); },
+    // Every document in one collection (path = 'teams/x/members').
+    async listAll(path) {
+      const all = [];
+      let page = '';
+      for (let n = 0; n < 40; n++) {
+        const r = await fetch(root + '/' + path + '?pageSize=300' + (page ? '&pageToken=' + encodeURIComponent(page) : ''), { headers: H });
+        if (r.status === 404) break;
+        if (!r.ok) throw new Error('list ' + r.status);
+        const d = await r.json();
+        for (const doc of d.documents || []) all.push(out(doc));
+        if (!d.nextPageToken) break;
+        page = d.nextPageToken;
+      }
+      return all;
+    },
+    // Documents in parent/col where field == value (a string).
+    async where(parent, col, field, value) {
+      const q = { from: [{ collectionId: col }], where: { fieldFilter: { field: { fieldPath: field }, op: 'EQUAL', value: { stringValue: String(value) } } } };
+      const r = await fetch(root + '/' + parent + ':runQuery', { method: 'POST', headers: H, body: JSON.stringify({ structuredQuery: q }) });
+      if (!r.ok) throw new Error('query ' + r.status);
+      return (await r.json()).filter((x) => x.document).map((x) => out(x.document));
+    },
+    async patch(path, data) {
+      const mask = Object.keys(data).map((k) => 'updateMask.fieldPaths=' + encodeURIComponent(k)).join('&');
+      const r = await fetch(root + '/' + path + '?' + mask, { method: 'PATCH', headers: H, body: JSON.stringify({ fields: fsEnc(data).mapValue.fields }) });
+      if (!r.ok) throw new Error('patch ' + r.status);
+    },
+    // Deletes full document names, up to 400 per request.
+    async delNames(names) {
+      const list = [...new Set(names.filter(Boolean))];
+      for (let i = 0; i < list.length; i += 400) {
+        const r = await fetch(root + ':commit', { method: 'POST', headers: H, body: JSON.stringify({ writes: list.slice(i, i + 400).map((n) => ({ delete: n })) }) });
+        if (!r.ok) throw new Error('delete ' + r.status);
+      }
+    },
+    docName(path) { return 'projects/' + pid + '/databases/(default)/documents/' + path; }
+  };
+  return api;
 }
-function priceFor(env, plan, interval) { return env['STRIPE_PRICE_' + plan.toUpperCase() + '_' + (interval === 'month' ? 'MONTH' : 'YEAR')] || ''; }
-function planForPrice(env, price) {
-  for (const pl of ['pro', 'elite']) for (const iv of ['month', 'year']) if (price && priceFor(env, pl, iv) === price) return { plan: pl, interval: iv };
-  return null;
+async function dropPhotos(env, msgs) {
+  const keys = msgs.map((m) => m.photo && m.photo.key).filter((k) => k && PHOTO_KEY.test(k));
+  if (keys.length && env.PHOTOS) for (let i = 0; i < keys.length; i += 900) await env.PHOTOS.delete(keys.slice(i, i + 900)).catch(() => {});
 }
-// Checkout and the billing portal: only the team's owner, signed in.
-async function billingTask(task, request, body, env, reply, allowed) {
-  if (!env.STRIPE_SECRET_KEY) return reply(500, { error: 'billing_not_configured' });
-  let u;
-  try { u = await hubUser(request, env); } catch (e) { return reply(e.status || 500, { error: e.error || 'upstream' }); }
-  if (!u.owner) return reply(403, { error: 'not_owner' });
-  const back = backUrl(body.back, allowed);
-  const withParam = (k, v) => { const x = new URL(back); x.searchParams.set('team', u.teamId); x.searchParams.set(k, v); return x.toString(); };
-  try {
-    const bill = (await u.db.get('config/billing')) || {};
-    if (task === 'billing-portal') {
-      if (!bill.customer) return reply(400, { error: 'no_customer' });
-      const ses = await stripe(env, 'POST', 'billing_portal/sessions', { customer: bill.customer, return_url: withParam('billing', 'portal') });
-      return reply(200, { url: ses.url });
-    }
-    // billing-checkout
-    const plan = body.plan === 'elite' ? 'elite' : body.plan === 'pro' ? 'pro' : '';
-    const price = plan && priceFor(env, plan, body.interval);
-    if (!price) return reply(400, { error: 'billing_not_configured', detail: 'Missing Stripe price for ' + plan + ' ' + body.interval });
-    // A team that already pays changes plans in the billing portal (Stripe prorates it).
-    if (bill.subscription && ['active', 'trialing', 'past_due'].includes(bill.status)) return reply(409, { error: 'has_subscription' });
-    const p = {
-      mode: 'subscription', 'line_items[0][price]': price, 'line_items[0][quantity]': '1',
-      success_url: withParam('billing', 'done'), cancel_url: withParam('billing', 'cancel'),
-      client_reference_id: u.teamId, 'metadata[teamId]': u.teamId,
-      'subscription_data[metadata][teamId]': u.teamId, 'subscription_data[metadata][plan]': plan,
-      allow_promotion_codes: 'true'
-    };
-    if (bill.customer) p.customer = bill.customer;
-    else if (u.member && u.member.email) p.customer_email = String(u.member.email);
-    const ses = await stripe(env, 'POST', 'checkout/sessions', p);
-    return reply(200, { url: ses.url });
-  } catch (e) {
-    return reply(e.status || 502, { error: e.error || 'upstream', detail: e.detail || '' });
+// One person's own data in one team.
+async function removeFromTeam(env, fs, teamId, uid) {
+  const t = 'teams/' + teamId;
+  const [tokens, invites, msgs, reports] = await Promise.all([
+    fs.where(t, 'pushTokens', 'uid', uid), fs.where(t, 'invites', 'by', uid),
+    fs.where(t, 'messages', 'uid', uid), fs.where(t, 'reports', 'by', uid).catch(() => [])
+  ]);
+  await dropPhotos(env, msgs);
+  await fs.delNames([t + '/members/' + uid, t + '/prefs/' + uid, t + '/guests/' + uid].map(fs.docName)
+    .concat(tokens.map((x) => x._name), invites.map((x) => x._name), msgs.map((x) => x._name), reports.map((x) => x._name)));
+}
+// A whole team, for an owner with no other coach to hand it to.
+async function deleteTeam(env, fs, teamId) {
+  const t = 'teams/' + teamId;
+  const names = [];
+  for (const col of TEAM_COLLECTIONS) {
+    const docs = await fs.listAll(t + '/' + col);
+    if (col === 'messages') await dropPhotos(env, docs);
+    if (col === 'fees') for (const f of docs) for (const p of await fs.listAll(t + '/fees/' + f._id + '/pay')) names.push(p._name);
+    for (const d of docs) names.push(d._name);
   }
+  names.push(fs.docName(t));
+  await fs.delNames(names);
 }
-// Verifies Stripe's signature, then updates the team's plan from the subscription Stripe has now.
-async function stripeWebhook(request, env) {
-  const ok = (status, msg) => new Response(JSON.stringify({ received: status === 200, msg }), { status, headers: { 'content-type': 'application/json' } });
-  if (!env.STRIPE_WEBHOOK_SECRET || !env.STRIPE_SECRET_KEY || !env.FIREBASE_SERVICE_ACCOUNT) return ok(500, 'not configured');
-  const raw = await request.text();
-  const sig = request.headers.get('stripe-signature') || '';
-  const parts = Object.fromEntries(sig.split(',').map((x) => x.split('=')).filter((x) => x.length === 2).map(([k, v]) => [k.trim(), v]));
-  const v1s = sig.split(',').filter((x) => x.trim().startsWith('v1=')).map((x) => x.trim().slice(3));
-  const t = Number(parts.t);
-  if (!t || !v1s.length || Math.abs(Date.now() / 1000 - t) > 300) return ok(400, 'bad signature');
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.STRIPE_WEBHOOK_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(t + '.' + raw)));
-  const hex = Array.from(mac, (b) => b.toString(16).padStart(2, '0')).join('');
-  if (!v1s.some((v) => sameText(v, hex))) return ok(400, 'bad signature');
-  let ev;
-  try { ev = JSON.parse(raw); } catch (e) { return ok(400, 'bad json'); }
-  const obj = (ev.data && ev.data.object) || {};
-  let subId = '', teamId = '';
-  if (ev.type === 'checkout.session.completed') { subId = obj.subscription; teamId = obj.client_reference_id || (obj.metadata && obj.metadata.teamId); }
-  else if (/^customer\.subscription\./.test(ev.type)) { subId = obj.id; teamId = obj.metadata && obj.metadata.teamId; }
-  else return ok(200, 'ignored');
-  teamId = cleanTeamId(teamId);
-  if (!subId || !teamId) return ok(200, 'no team');
-  try {
-    // Always read the subscription fresh, so events arriving out of order can't leave a wrong plan.
-    const sub = await stripe(env, 'GET', 'subscriptions/' + subId);
-    await applySubscription(env, teamId, sub);
-    return ok(200, 'updated');
-  } catch (e) {
-    return ok(500, 'update failed'); // Stripe retries
+async function leaveTeam(env, fs, teamId, uid) {
+  const t = 'teams/' + teamId;
+  const setup = await fs.get(t + '/config/setup');
+  if (setup && setup.owner === uid) {
+    const members = await fs.listAll(t + '/members');
+    const next = members.filter((x) => x._id !== uid && x.status === 'approved' && x.role === 'admin')
+      .sort((a, b) => (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0))[0];
+    if (!next) { await deleteTeam(env, fs, teamId); return { teamId, result: 'deleted' }; }
+    await fs.patch(t + '/config/setup', { owner: next._id });
+    if (await fs.get(t)) await fs.patch(t, { owner: next._id });
+    await removeFromTeam(env, fs, teamId, uid);
+    return { teamId, result: 'transferred' };
   }
+  await removeFromTeam(env, fs, teamId, uid);
+  return { teamId, result: 'left' };
 }
-async function applySubscription(env, teamId, sub) {
+async function accountDelete(request, body, env, reply) {
+  if (!env.FIREBASE_SERVICE_ACCOUNT) return reply(500, { error: 'not_configured' });
   const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
-  const db = firestore(sa.project_id, await googleToken(sa), teamId);
-  const item = (sub.items && sub.items.data && sub.items.data[0]) || {};
-  const found = planForPrice(env, item.price && item.price.id);
-  const live = ['active', 'trialing', 'past_due'].includes(sub.status);
-  const plan = live && found ? found.plan : 'free';
-  const end = Number(item.current_period_end || sub.current_period_end || 0) * 1000;
-  await db.patch('', { plan, planStatus: String(sub.status || ''), planInterval: live && found ? found.interval : '', planRenews: live ? end : 0, planCancels: !!sub.cancel_at_period_end, planUpdatedAt: Date.now() });
-  await db.patch('config/billing', { customer: String(sub.customer || ''), subscription: String(sub.id || ''), status: String(sub.status || ''), plan, updatedAt: Date.now() });
+  const m = /^Bearer\s+(\S+)$/.exec(request.headers.get('authorization') || '');
+  const uid = m ? await verifyIdToken(m[1], sa.project_id) : null;
+  if (!uid) return reply(401, { error: 'signed_out' });
+  let teams = [];
+  try {
+    const tok = await googleToken(sa);
+    const fs = fsRoot(sa.project_id, tok);
+    const mine = await fs.listAll('users/' + uid + '/teams');
+    // Their My Teams list, plus the team they're on now (older teams may be missing from the list).
+    const ids = [...new Set(mine.map((d) => cleanTeamId(d._id)).concat(cleanTeamId(body && body.teamId)).filter((x) => x && x !== 'the-hub'))];
+    for (const id of ids) teams.push(await leaveTeam(env, fs, id, uid));
+    await fs.delNames(mine.map((d) => d._name));
+    const r = await fetch('https://identitytoolkit.googleapis.com/v1/projects/' + sa.project_id + '/accounts:delete', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'content-type': 'application/json' }, body: JSON.stringify({ localId: uid })
+    });
+    if (!r.ok) return reply(502, { error: 'auth_delete_failed', teams });
+    return reply(200, { ok: true, teams });
+  } catch (e) {
+    return reply(502, { error: 'upstream', teams, detail: String((e && e.message) || '').slice(0, 120) });
+  }
 }
 function eastern(now) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' }).formatToParts(now).map((x) => [x.type, x.value]));
