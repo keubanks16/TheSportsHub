@@ -3582,7 +3582,7 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
     const gated = Backend.kind === 'fb' && Access.evaluated && !Access.canView;
     document.body.classList.toggle('gated', gated);
     if (gated) { $('#chat-bar').hidden = true; v.innerHTML = renderGate(); renderDock(); return; }
-    if (!UI.ready) { v.innerHTML = `<div class="loading"><img src="${LOGO}" alt=""><div>Loading your team…</div></div>`; return; }
+    if (!UI.ready) { v.innerHTML = `<div class="loading"><img src="${LOGO}" alt=""><div>Loading your team…</div></div>`; loadingWatchdog(); return; }
     if (UI.tab === 'swing' && !has('swing') && Dir.loaded) UI.tab = UI.swingFrom || 'stats';
     if (UI.tab === 'swing') {
       try { renderSwingPage(v); } catch (err) { console.error(err); }
@@ -6415,6 +6415,9 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
           await FB.A.signInWithEmailAndPassword(FB.auth, email, pw);
           if (UI.sheet === sh) closeSheet();
           toast('Signed in');
+          // Firestore's offline cache can miss the switch to a newly signed-in account and leave the
+          // team stuck loading, so start fresh, the same way signing out does.
+          setTimeout(() => location.reload(), 400);
           return;
         }
         if (sh.mode === 'reset') {
@@ -7584,8 +7587,24 @@ window.HUB_CONFIG = { appName: 'The Sports Hub', workerUrl: 'https://thesportshu
     }
     if (n) { scheduleRender(); toast(n === 1 ? 'Picked up a change that hadn\u2019t synced yet.' : 'Picked up ' + n + ' changes that hadn\u2019t synced yet.'); }
   }
+  // Safety net: if the team is still loading after 12 seconds while online, reload once.
+  // (sessionStorage stops it from reloading over and over if something else is wrong.)
+  let LoadingTimer = null;
+  function loadingWatchdog() {
+    if (LoadingTimer || Backend.kind !== 'fb') return;
+    LoadingTimer = setTimeout(() => {
+      LoadingTimer = null;
+      if (UI.ready || navigator.onLine === false) return;
+      if (Access.evaluated && !Access.canView) return;
+      try { if (sessionStorage.getItem('hub-load-retry')) return; sessionStorage.setItem('hub-load-retry', '1'); } catch (e) { return; }
+      location.reload();
+    }, 12000);
+  }
   function maybeReady() {
-    if (Data.loaded.team && Data.loaded.games && Data.loaded.opps) UI.ready = true;
+    if (Data.loaded.team && Data.loaded.games && Data.loaded.opps) {
+      UI.ready = true;
+      try { sessionStorage.removeItem('hub-load-retry'); } catch (e) { /* fine */ }
+    }
     if (UI.ready && Backend.kind === 'fb' && Access.evaluated && !restoreUnsynced.done) { restoreUnsynced.done = true; restoreUnsynced(); }
     scheduleRender();
     if (UI.sheet && UI.sheet.type === 'playerCard') renderSheet();
